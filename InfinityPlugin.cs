@@ -5,7 +5,7 @@
 	Code Credit:
 	PapaCharlie9  -  Basic Plugin Template Part (BasicPlugin.cs)
 	maxdralle -  MySQL Main Functions (VipSlotManager.cs)
-	MorpheusX(AUT) - MySQL Functions (CRemoteBanlist.cs)R
+	MorpheusX(AUT) - MySQL Functions (CRemoteBanlist.cs)
 
 	This plugin file is part of PRoCon Frostbite.
 
@@ -1143,8 +1143,8 @@ namespace PRoConEvents
                                     `id` INT( 11 ) NOT NULL AUTO_INCREMENT,
                                     `name` VARCHAR( 50 ) DEFAULT NULL,
                                     `guid` VARCHAR( 35 ) DEFAULT NULL,
-									`user_group` INT( 1 ) NOT NULL DEFAULT 0,
-									`penalty_type` INT( 1 ) DEFAULT 0,
+				    `user_group` INT( 1 ) NOT NULL DEFAULT 0,
+				    `penalty_type` INT( 1 ) DEFAULT 0,
                                     `time_add` INT ( 11 ) NOT NULL DEFAULT 0,
                                     `time_edit` INT ( 11 ) NOT NULL DEFAULT 0,
                                     PRIMARY KEY ( `id` )
