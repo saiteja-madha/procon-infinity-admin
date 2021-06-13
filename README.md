@@ -15,6 +15,7 @@ A simple procon plugin that uses MySQL database the sync admins and penalities a
 - `uncurse <player>`: uncurse a cursed player
 - `kick <player> (reason)`: kick a player from the server
 - `ban <player> (reason)`: ban a player from the server
+- `lookup <player|@id>`: find player in database
 
 ### User Commands
 - `help`: show list of available commands
