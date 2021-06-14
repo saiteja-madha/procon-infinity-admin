@@ -251,6 +251,7 @@ namespace PRoConEvents
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Uncurse", _cmdUncurse.GetType(), _cmdUncurse),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Kick", _cmdKick.GetType(), _cmdKick),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Ban", _cmdBan.GetType(), _cmdBan),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Unban", _cmdUnban.GetType(), _cmdUnban),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Lookup", _cmdLookup.GetType(), _cmdLookup),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Confirm", _cmdConfirm.GetType(), _cmdConfirm),
                 new CPluginVariable(SettingsAdditionalPrefix + "Debug level", _fDebugLevel.GetType(), _fDebugLevel),
@@ -352,6 +353,7 @@ namespace PRoConEvents
             else if (Regex.Match(strVariable, @"Uncurse").Success) _cmdUncurse = strValue;
             else if (Regex.Match(strVariable, @"Kick").Success) _cmdKick = strValue;
             else if (Regex.Match(strVariable, @"Ban").Success) _cmdBan = strValue;
+            else if (Regex.Match(strVariable, @"Unban").Success) _cmdUnban = strValue;
             else if (Regex.Match(strVariable, @"Lookup").Success) _cmdLookup = strValue;
             else if (Regex.Match(strVariable, @"Confirm").Success) _cmdConfirm = strValue;
             
