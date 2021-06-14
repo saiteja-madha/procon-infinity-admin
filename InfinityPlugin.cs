@@ -48,10 +48,22 @@ namespace PRoConEvents
         #region Variables & Initialisation
         //////////////////////
 
+        // constants
+        private const string SettingsUserCommandsPrefix = "1. User Commands|";
+        private const string SettingsAdminCommandsPrefix = "2. Admin Commands|";
+        private const string SettingsMySqlPrefix = "3. MySQL Details|";
+        private const string SettingsAdditionalPrefix = "4. Additional Settings|";
+        private const string NewLiner = "";
+        private const int MaxLineLength = 100;
+
+        // Additional settings
         private bool _fIsEnabled;
         private int _fDebugLevel;
-
         private bool _tableExists;
+        private bool _firstCheck;
+        private int _settingYellDuring;
+
+        // Cache variables
         private readonly Dictionary<string, CPlayerInfo> _mDicPlayerInfo;
         private readonly Dictionary<string, AuthSoldier> _mAuthPlayerInfo;
         private readonly Dictionary<string, Command> _mIngameCommands;
@@ -60,18 +72,18 @@ namespace PRoConEvents
         private readonly List<string> _lAdminsOnline;
         private CServerInfo _serverInfo;
 
+        // Database Settings
         private string _settingStrSqlHostname;
         private string _settingStrSqlPort;
         private string _settingStrSqlDatabase;
         private string _settingStrSqlUsername;
         private string _settingStrSqlPassword;
 
-        private readonly string _newLiner;
-        private int _settingYellDuring;
-
+        // User Commands
         private string _cmdHelp;
         private string _cmdAdminsOnline;
 
+        // Admin Commands
         private string _cmdSay;
         private string _cmdPlayerSay;
         private string _cmdYell;
@@ -82,6 +94,7 @@ namespace PRoConEvents
         private string _cmdKill;
         private string _cmdKick;
         private string _cmdBan;
+        private string _cmdUnban;
         private string _cmdLookup;
         private string _cmdConfirm;
 
@@ -89,8 +102,10 @@ namespace PRoConEvents
         {
             _fIsEnabled = false;
             _fDebugLevel = 1;
-
             _tableExists = false;
+            _firstCheck = false;
+            _settingYellDuring = 5;
+
             _mDicPlayerInfo = new Dictionary<string, CPlayerInfo>();
             _mAuthPlayerInfo = new Dictionary<string, AuthSoldier>();
             _mIngameCommands = new Dictionary<string, Command>();
@@ -105,9 +120,6 @@ namespace PRoConEvents
             _settingStrSqlUsername = string.Empty;
             _settingStrSqlPassword = string.Empty;
 
-            _newLiner = "";
-            _settingYellDuring = 5;
-            
             _cmdHelp = "help";
             _cmdAdminsOnline = "admins";
 
@@ -121,6 +133,7 @@ namespace PRoConEvents
             _cmdKick = "kick";
             _cmdSwap = "swap";
             _cmdBan = "ban";
+            _cmdUnban = "unban";
             _cmdLookup = "lookup";
             _cmdConfirm = "yes";
         }
@@ -220,29 +233,29 @@ namespace PRoConEvents
 
         public List<CPluginVariable> GetDisplayPluginVariables()
         {
-            List<CPluginVariable> lstReturn = new List<CPluginVariable>();
-
-            lstReturn.Add(new CPluginVariable("MySQL Details|Host", _settingStrSqlHostname.GetType(), _settingStrSqlHostname));
-            lstReturn.Add(new CPluginVariable("MySQL Details|Port", _settingStrSqlPort.GetType(), _settingStrSqlPort));
-            lstReturn.Add(new CPluginVariable("MySQL Details|Database", _settingStrSqlDatabase.GetType(), _settingStrSqlDatabase));
-            lstReturn.Add(new CPluginVariable("MySQL Details|Username", _settingStrSqlUsername.GetType(), _settingStrSqlUsername));
-            lstReturn.Add(new CPluginVariable("MySQL Details|Password", _settingStrSqlPassword.GetType(), _settingStrSqlPassword));
-            lstReturn.Add(new CPluginVariable("User Commands|Help Menu", _cmdHelp.GetType(), _cmdHelp));
-            lstReturn.Add(new CPluginVariable("User Commands|View Admins Online", _cmdAdminsOnline.GetType(), _cmdAdminsOnline));
-            lstReturn.Add(new CPluginVariable("Admin Commands|Say", _cmdSay.GetType(), _cmdSay));
-            lstReturn.Add(new CPluginVariable("Admin Commands|Playersay", _cmdPlayerSay.GetType(), _cmdPlayerSay));
-            lstReturn.Add(new CPluginVariable("Admin Commands|Yell", _cmdYell.GetType(), _cmdYell));
-            lstReturn.Add(new CPluginVariable("Admin Commands|Playeryell", _cmdPlayerYell.GetType(), _cmdPlayerYell));
-            lstReturn.Add(new CPluginVariable("Admin Commands|Swap", _cmdSwap.GetType(), _cmdSwap));
-            lstReturn.Add(new CPluginVariable("Admin Commands|Kill", _cmdKill.GetType(), _cmdKill));
-            lstReturn.Add(new CPluginVariable("Admin Commands|Curse", _cmdCurse.GetType(), _cmdCurse));
-            lstReturn.Add(new CPluginVariable("Admin Commands|Uncurse", _cmdUncurse.GetType(), _cmdUncurse));
-            lstReturn.Add(new CPluginVariable("Admin Commands|Kick", _cmdKick.GetType(), _cmdKick));
-            lstReturn.Add(new CPluginVariable("Admin Commands|Ban", _cmdBan.GetType(), _cmdBan));
-            lstReturn.Add(new CPluginVariable("Admin Commands|Confirm", _cmdConfirm.GetType(), _cmdConfirm));
-            lstReturn.Add(new CPluginVariable("Settings|Debug level", _fDebugLevel.GetType(), _fDebugLevel));
-            lstReturn.Add(new CPluginVariable("Settings|During for Yell and PYell in sec. (5-60)", _settingYellDuring.GetType(), _settingYellDuring));
-
+            var lstReturn = new List<CPluginVariable> {
+                new CPluginVariable(SettingsMySqlPrefix + "Host", _settingStrSqlHostname.GetType(), _settingStrSqlHostname),
+                new CPluginVariable(SettingsMySqlPrefix + "Port", _settingStrSqlPort.GetType(), _settingStrSqlPort),
+                new CPluginVariable(SettingsMySqlPrefix + "Database", _settingStrSqlDatabase.GetType(), _settingStrSqlDatabase),
+                new CPluginVariable(SettingsMySqlPrefix + "Username", _settingStrSqlUsername.GetType(), _settingStrSqlUsername),
+                new CPluginVariable(SettingsMySqlPrefix + "Password", _settingStrSqlPassword.GetType(), _settingStrSqlPassword),
+                new CPluginVariable(SettingsUserCommandsPrefix + "Help Menu", _cmdHelp.GetType(), _cmdHelp),
+                new CPluginVariable(SettingsUserCommandsPrefix + "View Admins Online", _cmdAdminsOnline.GetType(), _cmdAdminsOnline),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Say", _cmdSay.GetType(), _cmdSay),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Playersay", _cmdPlayerSay.GetType(), _cmdPlayerSay),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Yell", _cmdYell.GetType(), _cmdYell),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Playeryell", _cmdPlayerYell.GetType(), _cmdPlayerYell),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Swap", _cmdSwap.GetType(), _cmdSwap),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Kill", _cmdKill.GetType(), _cmdKill),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Curse", _cmdCurse.GetType(), _cmdCurse),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Uncurse", _cmdUncurse.GetType(), _cmdUncurse),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Kick", _cmdKick.GetType(), _cmdKick),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Ban", _cmdBan.GetType(), _cmdBan),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Lookup", _cmdLookup.GetType(), _cmdLookup),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Confirm", _cmdConfirm.GetType(), _cmdConfirm),
+                new CPluginVariable(SettingsAdditionalPrefix + "Debug level", _fDebugLevel.GetType(), _fDebugLevel),
+                new CPluginVariable(SettingsAdditionalPrefix + "During for Yell and PYell in sec. (5-60)", _settingYellDuring.GetType(), _settingYellDuring)
+            };
 
             return lstReturn;
         }
@@ -251,100 +264,78 @@ namespace PRoConEvents
         {
             DebugWrite("[SetPluginVariable] Variable: " + strVariable + " Value: " + strValue, 4);
 
-            if (Regex.Match(strVariable, @"Debug level").Success)
-            {
+            if (Regex.Match(strVariable, @"Debug level").Success){
                 int tmp;
                 int.TryParse(strValue, out tmp);
-                if (tmp >= 0 && tmp <= 4)
-                {
+                if (tmp >= 0 && tmp <= 4){
                     _fDebugLevel = tmp;
                 }
-                else
-                {
+                else{
                     ConsoleError("Invalid value for Debug Level: '" + strValue + "'. It must be a number between 1 and 4. (e.g.: 3)");
                 }
             }
-            else if (Regex.Match(strVariable, @"Host").Success)
-            {
-                if (_fIsEnabled)
-                {
+            else if (Regex.Match(strVariable, @"Host").Success){
+                if (_fIsEnabled && !_firstCheck){
                     ConsoleError("SQL Settings locked! Please disable the Plugin and try again...");
                     return;
                 }
 
-                if (strValue.Length <= 100)
-                {
+                if (strValue.Length <= 100){
                     _settingStrSqlHostname = strValue.Replace(Environment.NewLine, "");
                 }
             }
-            else if (Regex.Match(strVariable, @"Port").Success)
-            {
-                if (_fIsEnabled)
-                {
+            else if (Regex.Match(strVariable, @"Port").Success){
+                if (_fIsEnabled && !_firstCheck){
                     ConsoleError("SQL Settings locked! Please disable the Plugin and try again...");
                     return;
                 }
 
                 int tmpPort;
                 int.TryParse(strValue, out tmpPort);
-                if (tmpPort > 0 && tmpPort < 65536)
-                {
+                if (tmpPort > 0 && tmpPort < 65536){
                     _settingStrSqlPort = tmpPort.ToString();
                 }
-                else
-                {
+                else{
                     ConsoleError("Invalid value for MySQL Port: '" + strValue + "'. Port must be a number between 1 and 65535. (e.g.: 3306)");
                 }
             }
-            else if (Regex.Match(strVariable, @"Database").Success)
-            {
-                if (_fIsEnabled)
-                {
+            else if (Regex.Match(strVariable, @"Database").Success){
+                if (_fIsEnabled && !_firstCheck){
                     ConsoleError("SQL Settings locked! Please disable the Plugin and try again...");
                     return;
                 }
 
-                if (strValue.Length <= 100)
-                {
+                if (strValue.Length <= 100){
                     _settingStrSqlDatabase = strValue.Replace(Environment.NewLine, "");
                 }
             }
-            else if (Regex.Match(strVariable, @"Username").Success)
-            {
-                if (_fIsEnabled)
-                {
+            else if (Regex.Match(strVariable, @"Username").Success){
+                if (_fIsEnabled && !_firstCheck){
                     ConsoleError("SQL Settings locked! Please disable the Plugin and try again...");
                     return;
                 }
 
-                if (strValue.Length <= 100)
-                {
+                if (strValue.Length <= 100){
                     _settingStrSqlUsername = strValue.Replace(Environment.NewLine, "");
                 }
             }
-            else if (Regex.Match(strVariable, @"Password").Success)
-            {
-                if (_fIsEnabled)
-                {
+            else if (Regex.Match(strVariable, @"Password").Success){
+                if (_fIsEnabled && !_firstCheck){
                     ConsoleError("SQL Settings locked! Please disable the Plugin and try again...");
                     return;
                 }
 
-                if (strValue.Length <= 100)
-                {
+                if (strValue.Length <= 100){
                     _settingStrSqlPassword = strValue.Replace(Environment.NewLine, "");
                 }
             }
-            else if (Regex.Match(strVariable, @"During for Yell and PYell in sec").Success)
-            {
+            else if (Regex.Match(strVariable, @"During for Yell and PYell in sec").Success){
                 int tmpyelltime;
                 int.TryParse(strValue, out tmpyelltime);
-                if (tmpyelltime >= 5 && tmpyelltime <= 60)
-                {
+                if (tmpyelltime >= 5 && tmpyelltime <= 60){
                     _settingYellDuring = tmpyelltime;
                 }
-                else
-                {
+                else{
                     ConsoleError("Invalid value for Yell During. Time must be a number between 5 and 60. (e.g.: 15)");
                 }
             }
@@ -364,7 +355,7 @@ namespace PRoConEvents
             else if (Regex.Match(strVariable, @"Lookup").Success) _cmdLookup = strValue;
             else if (Regex.Match(strVariable, @"Confirm").Success) _cmdConfirm = strValue;
             
-            RegisterCustomCommands();
+            RegisterIngameCommands();
             
         }
 
@@ -420,19 +411,17 @@ namespace PRoConEvents
         public void OnPluginEnable()
         {
             _fIsEnabled = true;
-            _mDicPlayerInfo.Clear();
-            _mAuthPlayerInfo.Clear();
-            _lCursedPlayers.Clear();
-            _lAdminsOnline.Clear();
+            _firstCheck = false;
             ExecuteCommand("procon.protected.send", "admin.listPlayers", "all");
             BuildRequiredTables();
-            RegisterCustomCommands();
+            RegisterIngameCommands();
             ConsoleWrite("Enabled!");
         }
 
         public void OnPluginDisable()
         {
             _fIsEnabled = false;
+            _firstCheck = false;
             _mDicPlayerInfo.Clear();
             _mAuthPlayerInfo.Clear();
             _mIngameCommands.Clear();
@@ -598,7 +587,7 @@ namespace PRoConEvents
             return false;
         }
 
-        private void RegisterCustomCommands()
+        private void RegisterIngameCommands()
         {
             _mIngameCommands.Clear();
             
@@ -659,13 +648,13 @@ namespace PRoConEvents
             if (!string.IsNullOrEmpty(_cmdCurse))
             {
                 _mIngameCommands.Add(_cmdCurse,
-                    new Command(_cmdCurse, "curse a player", "<player> <reason>", true, 1, true, 1, OnCommandCurse));
+                    new Command(_cmdCurse, "curse a player", "<@uid/player> <reason>", true, 1, true, 1, true, OnCommandCurse));
             }
             
             if (!string.IsNullOrEmpty(_cmdUncurse))
             {
                 _mIngameCommands.Add(_cmdUncurse,
-                    new Command(_cmdUncurse, "uncurse a player", "<player>", true, 1, true, 1, OnCommandUnCurse));
+                    new Command(_cmdUncurse, "uncurse a player", "<@uid/player>", true, 1, true, 1, true, OnCommandUnCurse));
             }
             
             if (!string.IsNullOrEmpty(_cmdKick))
@@ -677,7 +666,13 @@ namespace PRoConEvents
             if (!string.IsNullOrEmpty(_cmdBan))
             {
                 _mIngameCommands.Add(_cmdBan,
-                    new Command(_cmdBan, "ban a player", "<player> <reason>", true, 1, true, 1, OnCommandBan));
+                    new Command(_cmdBan, "ban a player", "<@uid/player> <reason>", true, 1, true, 1, true, OnCommandBan));
+            }
+            
+            if (!string.IsNullOrEmpty(_cmdUnban))
+            {
+                _mIngameCommands.Add(_cmdUnban,
+                    new Command(_cmdUnban, "unban a player", "<@uid>", true, 1, true, 0, true, OnCommandUnBan));
             }
             
             if (!string.IsNullOrEmpty(_cmdLookup))
@@ -913,58 +908,105 @@ namespace PRoConEvents
         
         private void OnCommandCurse(string strSpeaker, CapturedCommand capCommand)
         {
-            string target = capCommand.MatchedArguments[0].Argument;
             string reason = capCommand.ExtraArguments;
-            DebugWrite("[COMMAND] [CURSE] - Admin: " + strSpeaker + " Target: " + target, 2);
+            string target;
+            bool success;
 
-            if (!IsPlayerInfoCached(target)) return;
-            if (_lCursedPlayers.Contains(target))
+            if (capCommand.UserId > 0)
             {
-                string message = target + " is already cursed";
-                PlayerSayMsg(strSpeaker, message);
+                DebugWrite("[COMMAND] [CURSE] - Admin: " + strSpeaker + " UserId: " + capCommand.UserId, 2);
+                AuthSoldier client = LookupClient(capCommand.UserId);
+                target = client.SoldierName;
+                if (string.IsNullOrEmpty(target))
+                {
+                    PlayerSayMsg(strSpeaker, "No users found with userId: " + target);
+                    return;
+                }
+
+                if (client.PenaltyType == (int) Penalty.Curse)
+                {
+                    PlayerSayMsg(strSpeaker, target + " is already cursed");
+                    return;
+                }
+                
+                success = AddPenaltyToDb(_mAuthPlayerInfo[strSpeaker].Id, capCommand.UserId, reason, Penalty.Curse);
+                if (success)
+                {
+                    KeyValuePair<string, AuthSoldier> match = _mAuthPlayerInfo.First(kvp => kvp.Value.Id == capCommand.UserId);
+                    _lCursedPlayers.Add(match.Key);
+                }
             }
             else
             {
+                target = capCommand.MatchedArguments[0].Argument;
+                DebugWrite("[COMMAND] [CURSE] - Admin: " + strSpeaker + " Target: " + target, 2);
+                if (!IsPlayerInfoCached(target)) return;
                 if (!IsAuthenticated(target))
                 {
                     PlayerSayMsg(target, "Failed to authenticate player. Try again later");
                     return;
                 }
-
+                if (_lCursedPlayers.Contains(target))
+                {
+                    PlayerSayMsg(strSpeaker, target + " is already cursed");
+                    return;
+                }
+                
                 AuthSoldier adminData = _mAuthPlayerInfo[strSpeaker];
                 AuthSoldier targetData = _mAuthPlayerInfo[target];
-
-                bool success = AddPenaltyToDb(targetData.Id, adminData.Id, reason, Penalty.Curse);
-
-                if (success)
-                {
-                    string message = target + " is cursed by " + strSpeaker;
-                    if (!string.IsNullOrEmpty(reason)) message += " for " + reason;
-
-                    SayMsg(message);
-                    _lCursedPlayers.Add(target);
-                }
-                else
-                {
-                    PlayerSayMsg(strSpeaker, "Failed to curse " + target + ". Database error!");
-                }
+                
+                success = AddPenaltyToDb(targetData.Id, adminData.Id, reason, Penalty.Curse);
+                if (success) _lCursedPlayers.Add(target);
             }
+
+            if (success)
+            {
+                string message = target + " is cursed by " + strSpeaker;
+                if (!string.IsNullOrEmpty(reason)) message += " for " + reason;
+                SayMsg(message);
+            }
+            else
+            {
+                PlayerSayMsg(strSpeaker, "Failed to curse " + target + ". Database error!");
+            }
+            
         }
 
         private void OnCommandUnCurse(string strSpeaker, CapturedCommand capCommand)
         {
-            string target = capCommand.MatchedArguments[0].Argument;
-            string reason = capCommand.ExtraArguments;
-            DebugWrite("[COMMAND] [UNCURSE] - Admin: " + strSpeaker + " Target: " + target, 2);
-
-            if (!IsPlayerInfoCached(target)) return;
-            if (!_lCursedPlayers.Contains(target))
+            string target;
+            bool success;
+            if (capCommand.UserId > 0)
             {
-                string message = target + " is not cursed";
-                PlayerSayMsg(strSpeaker, message);
+                DebugWrite("[COMMAND] [UNCURSE] - Admin: " + strSpeaker + " UserId: " + capCommand.UserId, 2);
+                AuthSoldier client = LookupClient(capCommand.UserId);
+                target = client.SoldierName;
+                if (string.IsNullOrEmpty(target))
+                {
+                    PlayerSayMsg(strSpeaker, "No users found with userId: " + target);
+                    return;
+                }
+
+                if (client.PenaltyType != (int) Penalty.Curse)
+                {
+                    PlayerSayMsg(strSpeaker, target + " is not cursed");
+                    return;
+                }
+                
+                success = RemovePenalty(client.Id);
             }
             else
             {
+                target = capCommand.MatchedArguments[0].Argument;
+                DebugWrite("[COMMAND] [UNCURSE] - Admin: " + strSpeaker + " Target: " + target, 2);
+                if (!IsPlayerInfoCached(target)) return;
+                if (!_lCursedPlayers.Contains(target))
+                {
+                    string message = target + " is not cursed";
+                    PlayerSayMsg(strSpeaker, message);
+                    return;
+                }
+
                 if (!IsAuthenticated(target))
                 {
                     PlayerSayMsg(target, "Failed to authenticate player. Try again later");
@@ -972,20 +1014,18 @@ namespace PRoConEvents
                 }
 
                 AuthSoldier targetData = _mAuthPlayerInfo[target];
-                bool success = RemovePenalty(targetData.Id);
+                success = RemovePenalty(targetData.Id);
+            }
 
-                if (success)
-                {
-                    string message = target + " is uncursed by " + strSpeaker;
-                    if (!string.IsNullOrEmpty(reason)) message += " for " + reason;
-
-                    SayMsg(message);
-                    _lCursedPlayers.Remove(target);
-                }
-                else
-                {
-                    PlayerSayMsg(strSpeaker, "Failed to uncurse " + target + ". Database error!");
-                }
+            if (success)
+            {
+                string message = target + " is uncursed by " + strSpeaker;
+                SayMsg(message);
+                if (_lCursedPlayers.Contains(target)) _lCursedPlayers.Remove(target);
+            }
+            else
+            {
+                PlayerSayMsg(strSpeaker, "Failed to uncurse " + target + ". Database error!");
             }
         }
 
@@ -1010,27 +1050,54 @@ namespace PRoConEvents
         
         private void OnCommandBan(string strSpeaker, CapturedCommand capCommand)
         {
-            string target = capCommand.MatchedArguments[0].Argument;
             string reason = capCommand.ExtraArguments;
-            DebugWrite("[COMMAND] [BAN] - Admin: " + strSpeaker + " Target: " + target, 2);
-            
-            if (!IsPlayerInfoCached(target)) return;
-            if (!IsAuthenticated(target))
+            bool success;
+            string target;
+            if (capCommand.UserId > 0)
             {
-                PlayerSayMsg(target, "Failed to authenticate player. Try again later");
-                return;
+                DebugWrite("[COMMAND] [BAN] - Admin: " + strSpeaker + " UserId: " + capCommand.UserId, 2);
+                AuthSoldier client = LookupClient(capCommand.UserId);
+                target = client.SoldierName;
+                if (string.IsNullOrEmpty(target))
+                {
+                    PlayerSayMsg(strSpeaker, "No users found with userId: " + target);
+                    return;
+                }
+                
+                if (client.PenaltyType == (int) Penalty.Ban)
+                {
+                    PlayerSayMsg(strSpeaker, target + " is already banned");
+                    return;
+                }
+                
+                success = AddPenaltyToDb(_mAuthPlayerInfo[strSpeaker].Id, capCommand.UserId, reason, Penalty.Ban);
+                if (success)
+                {
+                    KeyValuePair<string, AuthSoldier> match = _mAuthPlayerInfo.First(kvp => kvp.Value.Id == capCommand.UserId);
+                    Kick(match.Key, "You are banned by " + strSpeaker);
+                }
             }
+            else
+            {
+                target = capCommand.MatchedArguments[0].Argument;
+                DebugWrite("[COMMAND] [BAN] - Admin: " + strSpeaker + " Target: " + target, 2);
+                if (!IsPlayerInfoCached(target)) return;
+                if (!IsAuthenticated(target))
+                {
+                    PlayerSayMsg(target, "Failed to authenticate player. Try again later");
+                    return;
+                }
+                AuthSoldier adminData = _mAuthPlayerInfo[strSpeaker];
+                AuthSoldier targetData = _mAuthPlayerInfo[target];
 
-            AuthSoldier adminData = _mAuthPlayerInfo[strSpeaker];
-            AuthSoldier targetData = _mAuthPlayerInfo[target];
-
-            bool success = AddPenaltyToDb(targetData.Id, adminData.Id, reason, Penalty.Ban);
+                success = AddPenaltyToDb(targetData.Id, adminData.Id, reason, Penalty.Ban);
+                if (success) Kick(target, "You are banned by " + strSpeaker);
+            }
 
             if (success)
             {
                 string message = target + " is banned by " + strSpeaker;
                 if (!string.IsNullOrEmpty(reason)) message += " for " + reason;
-                Kick(target, "You are banned by " + strSpeaker);
                 SayMsg(message);
             }
             else
@@ -1038,14 +1105,39 @@ namespace PRoConEvents
                 PlayerSayMsg(strSpeaker, "Failed to Ban " + target + ". Database error!");
             }
         }
-        
+
+        private void OnCommandUnBan(string strSpeaker, CapturedCommand capCommand)
+        {
+            if (capCommand.UserId == 0) return;
+            
+            DebugWrite("[COMMAND] [UNBAN] - " + strSpeaker + " UserId: " + capCommand.UserId, 2);
+            AuthSoldier client = LookupClient(capCommand.UserId);
+            if (client.Id == 0)
+            {
+                PlayerSayMsg(strSpeaker, "No user found with userId: " + capCommand.UserId);
+                return;
+            }
+
+            if (client.PenaltyType != (int) Penalty.Ban)
+            {
+                PlayerSayMsg(strSpeaker, client.SoldierName + " (" + client.Id + ") " + "is not banned!");
+                return;
+            }
+
+            string message = RemovePenalty(client.Id)
+                ? client.SoldierName + " (" + client.Id + ") " + "is unbanned successfully!"
+                : "Failed to unban " + client.SoldierName;
+
+            PlayerSayMsg(strSpeaker, message);
+        }
+
         private void OnCommandLookUp(string strSpeaker, CapturedCommand capCommand)
         {
             if (capCommand.UserId > 0)
             {
                 DebugWrite("[COMMAND] [LOOKUP] - " + strSpeaker + " UserId: " + capCommand.UserId, 2);
-                string client = LookupClient(capCommand.UserId);
-                string message = string.IsNullOrEmpty(client) ? "No user found with userId: " + capCommand.UserId : "Player found: " + client + " (" + capCommand.UserId + ")";
+                AuthSoldier client = LookupClient(capCommand.UserId);
+                string message = client.Id == 0 ? "No user found with userId: " + capCommand.UserId : "Player found: " + client.SoldierName + " (" + capCommand.UserId + ")";
                 PlayerSayMsg(strSpeaker, message);
             }
             else
@@ -1416,13 +1508,10 @@ namespace PRoConEvents
             return SqlNonQuery(sql, "RemovePenalty");
         }
 
-        private string LookupClient(int uid)
+        private AuthSoldier LookupClient(int uid)
         {
-            string name = null;
             if (!_tableExists) return null;
-
             const string sql1 = @"SELECT * FROM `clients` WHERE id = @Id";
-
             using (MySqlCommand myCmd = new MySqlCommand(sql1))
             {
                 myCmd.Parameters.AddWithValue("@Id", uid);
@@ -1430,15 +1519,14 @@ namespace PRoConEvents
                 if (resultTable.Rows.Count == 0)
                 {
                     DebugWrite("[SQL-LookupClient]: No user found with id: " + uid, 4);
+                    return new AuthSoldier();
                 }
                 else
                 {
                     DebugWrite("[SQL-LookupClient]: User found with id= " + uid, 4);
-                    name = resultTable.Rows[0]["name"].ToString();
+                    return new AuthSoldier(resultTable.Rows[0]);
                 }
             }
-
-            return name;
         }
         
         private List<string[]> LookupClient(string matchingName)
@@ -1554,17 +1642,16 @@ namespace PRoConEvents
         private void PlayerSayMsg(string target, string message)
         {
             if (!_fIsEnabled || message.Length < 3) return;
-            const int maxLineLength = 100;
 
             ExecuteCommand("procon.protected.chat.write", "(PlayerSay " + target + ") " + message.Replace(Environment.NewLine, " "));
-            if (message.Length < maxLineLength)
+            if (message.Length < MaxLineLength)
             {
                 ExecuteCommand("procon.protected.send", "admin.say", message.Replace(Environment.NewLine, " "), "player", target);
             }
             else
             {
                 int charCount = 0;
-                IEnumerable<string> lines = message.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).GroupBy(w => (charCount += w.Length + 1) / maxLineLength).Select(g => string.Join(" ", g.ToArray()));
+                IEnumerable<string> lines = message.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).GroupBy(w => (charCount += w.Length + 1) / MaxLineLength).Select(g => string.Join(" ", g.ToArray()));
                 foreach (string line in lines)
                 {
                     ExecuteCommand("procon.protected.send", "admin.say", line, "player", target);
@@ -1576,13 +1663,12 @@ namespace PRoConEvents
         private void SayMsg(string message)
         {
             if (!_fIsEnabled || message.Length < 3) return;
-            const int maxLineLength = 100;
-            
+
             ExecuteCommand("procon.protected.chat.write", message.Replace(Environment.NewLine, " "));
-            if (message.Length < maxLineLength)
+            if (message.Length < MaxLineLength)
             {
                 int charCount = 0;
-                IEnumerable<string> lines = message.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).GroupBy(w => (charCount += w.Length + 1) / maxLineLength).Select(g => string.Join(" ", g.ToArray()));
+                IEnumerable<string> lines = message.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).GroupBy(w => (charCount += w.Length + 1) / MaxLineLength).Select(g => string.Join(" ", g.ToArray()));
                 foreach (string line in lines)
                 {
                     ExecuteCommand("procon.protected.send", "admin.say", line, "all");
@@ -1598,7 +1684,7 @@ namespace PRoConEvents
         private void PlayerYellMsg(string target, string message)
         {
             if (!_fIsEnabled || message.Length < 3) return;
-            ExecuteCommand("procon.protected.send", "admin.yell", message.Replace(Environment.NewLine, _newLiner), StrYellDuration(), "player", target);
+            ExecuteCommand("procon.protected.send", "admin.yell", message.Replace(Environment.NewLine, NewLiner), StrYellDuration(), "player", target);
             ExecuteCommand("procon.protected.chat.write", "(PlayerYell " + target + ") " + message.Replace(Environment.NewLine, "  -  "));
             DebugWrite("[PlayerYellMsg] - Player: " + target + " Message: " + message, 3);
         }
@@ -1606,7 +1692,7 @@ namespace PRoConEvents
         private void YellMsg(string message)
         {
             if (!_fIsEnabled || message.Length < 3) return;
-            ExecuteCommand("procon.protected.send", "admin.yell", message.Replace(Environment.NewLine, _newLiner), StrYellDuration(), "all");
+            ExecuteCommand("procon.protected.send", "admin.yell", message.Replace(Environment.NewLine, NewLiner), StrYellDuration(), "all");
             ExecuteCommand("procon.protected.chat.write", "(Yell) " + message.Replace(Environment.NewLine, "  -  "));
             DebugWrite("[YellMsg] - " + message, 3);
         }
@@ -1630,6 +1716,7 @@ namespace PRoConEvents
 
         private void Kill(string target)
         {
+            if (!_mDicPlayerInfo.ContainsKey(target)) return;
             ExecuteCommand("procon.protected.send", "admin.killPlayer", target);
             DebugWrite("[Kill] - " + target, 3);
         }
@@ -1670,13 +1757,13 @@ namespace PRoConEvents
                 PenaltyType = Convert.ToInt32(row["penalty_type"]);
             }
 
-            public int Id { get; private set; }
+            public int Id { get; }
 
-            public string SoldierName { get; private set; }
+            public string SoldierName { get; }
 
-            public int UserGroup { get; private set; }
+            public int UserGroup { get; }
 
-            public int PenaltyType { get; private set; }
+            public int PenaltyType { get; }
         }
 
         private enum Penalty
@@ -1690,11 +1777,11 @@ namespace PRoConEvents
 
         private class Command
         {
-            public string Invoke { get; }
+            private string Invoke { get; }
 
-            public string Help { get; }
+            private string Help { get; }
 
-            public string Usage { get; }
+            private string Usage { get; }
 
             public bool IsAdmin { get; }
 
@@ -1890,8 +1977,8 @@ namespace PRoConEvents
             public override string ToString()
             {
                 string str = string.Format("{0}{1}", ResponseScope, Invoke);
-                foreach (MatchArgument matchedArgument in this.MatchedArguments)
-                    str = string.Format("{0} {1}", (object) str, (object) matchedArgument.Argument);
+                foreach (MatchArgument matchedArgument in MatchedArguments)
+                    str = string.Format("{0} {1}", str, matchedArgument.Argument);
                 return str;
             }
         }
@@ -1902,11 +1989,14 @@ namespace PRoConEvents
             {
                 Command = command;
                 CapturedCommand = capturedCommand;
+                AddedTime = GetTimeEpoch();
             }
 
-            public Command Command { get; set; }
+            public Command Command { get; }
 
-            public CapturedCommand CapturedCommand { get; set; }
+            public CapturedCommand CapturedCommand { get; }
+            
+            public long AddedTime { get; }
         }
 
         #endregion
