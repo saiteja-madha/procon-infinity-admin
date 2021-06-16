@@ -3,9 +3,8 @@
 	Version: 0.0.0.1
 
 	Code Credit:
-	PapaCharlie9  -  Basic Plugin Template Part (BasicPlugin.cs)
-	maxdralle -  MySQL Main Functions (VipSlotManager.cs)
-	MorpheusX(AUT) - MySQL Functions (CRemoteBanlist.cs)
+	PapaCharlie9 - Basic Plugin Template Part (BasicPlugin.cs)
+	maxdralle - MySQL Main Functions (VipSlotManager.cs)
 
 	This plugin file is part of PRoCon Frostbite.
 
@@ -30,6 +29,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using PRoCon.Core;
 using PRoCon.Core.Plugin;
 using PRoCon.Core.Plugin.Commands;
@@ -47,22 +47,23 @@ namespace PRoConEvents
         //////////////////////
         #region Variables & Initialisation
         //////////////////////
-
+        
         // constants
         private const string SettingsUserCommandsPrefix = "1. User Commands|";
-        private const string SettingsAdminCommandsPrefix = "2. Admin Commands|";
-        private const string SettingsMySqlPrefix = "3. MySQL Details|";
-        private const string SettingsAdditionalPrefix = "4. Additional Settings|";
+        private const string SettingsVipCommandsPrefix = "2. VIP Commands|";
+        private const string SettingsAdminCommandsPrefix = "3. Admin Commands|";
+        private const string SettingsSuperAdminCommandsPrefix = "4. Super Admin Commands|";
+        private const string SettingsMySqlPrefix = "5. MySQL Details|";
+        private const string SettingsAdditionalPrefix = "6. Additional Settings|";
         private const string NewLiner = "";
         private const int MaxLineLength = 100;
-
-        // Additional settings
+        private readonly DateTime _layerStartingTime = DateTime.UtcNow;
+        
+        // Variables
         private bool _fIsEnabled;
-        private int _fDebugLevel;
-        private bool _tableExists;
         private bool _firstCheck;
-        private int _settingYellDuring;
-
+        private bool _tableExists;
+        
         // Cache variables
         private readonly Dictionary<string, CPlayerInfo> _mDicPlayerInfo;
         private readonly Dictionary<string, AuthSoldier> _mAuthPlayerInfo;
@@ -78,12 +79,20 @@ namespace PRoConEvents
         private string _settingStrSqlDatabase;
         private string _settingStrSqlUsername;
         private string _settingStrSqlPassword;
+        
+        // Additional settings
+        private int _fDebugLevel;
+        private int _settingYellDuring;
 
         // User Commands
         private string _cmdHelp;
         private string _cmdAdminsOnline;
+        
+        // VIP Commands
+        private string _cmdKillMe;
 
         // Admin Commands
+        private string _cmdConfirm;
         private string _cmdSay;
         private string _cmdPlayerSay;
         private string _cmdYell;
@@ -96,7 +105,7 @@ namespace PRoConEvents
         private string _cmdBan;
         private string _cmdUnban;
         private string _cmdLookup;
-        private string _cmdConfirm;
+        private string _cmdPutGroup;
 
         public InfinityPlugin()
         {
@@ -119,10 +128,13 @@ namespace PRoConEvents
             _settingStrSqlDatabase = string.Empty;
             _settingStrSqlUsername = string.Empty;
             _settingStrSqlPassword = string.Empty;
-
+            
             _cmdHelp = "help";
             _cmdAdminsOnline = "admins";
 
+            _cmdKillMe = "killme";
+
+            _cmdConfirm = "yes";
             _cmdSay = "say";
             _cmdPlayerSay = "psay";
             _cmdYell = "yell";
@@ -135,7 +147,7 @@ namespace PRoConEvents
             _cmdBan = "ban";
             _cmdUnban = "unban";
             _cmdLookup = "lookup";
-            _cmdConfirm = "yes";
+            _cmdPutGroup = "putgroup";
         }
 
         #endregion
@@ -241,6 +253,7 @@ namespace PRoConEvents
                 new CPluginVariable(SettingsMySqlPrefix + "Password", _settingStrSqlPassword.GetType(), _settingStrSqlPassword),
                 new CPluginVariable(SettingsUserCommandsPrefix + "Help Menu", _cmdHelp.GetType(), _cmdHelp),
                 new CPluginVariable(SettingsUserCommandsPrefix + "View Admins Online", _cmdAdminsOnline.GetType(), _cmdAdminsOnline),
+                new CPluginVariable(SettingsVipCommandsPrefix + "Commit a suicide", _cmdKillMe.GetType(), _cmdKillMe),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Say", _cmdSay.GetType(), _cmdSay),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Playersay", _cmdPlayerSay.GetType(), _cmdPlayerSay),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Yell", _cmdYell.GetType(), _cmdYell),
@@ -253,6 +266,7 @@ namespace PRoConEvents
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Ban", _cmdBan.GetType(), _cmdBan),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Unban", _cmdUnban.GetType(), _cmdUnban),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Lookup", _cmdLookup.GetType(), _cmdLookup),
+                new CPluginVariable(SettingsSuperAdminCommandsPrefix + "Set player group", _cmdPutGroup.GetType(), _cmdPutGroup),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Confirm", _cmdConfirm.GetType(), _cmdConfirm),
                 new CPluginVariable(SettingsAdditionalPrefix + "Debug level", _fDebugLevel.GetType(), _fDebugLevel),
                 new CPluginVariable(SettingsAdditionalPrefix + "During for Yell and PYell in sec. (5-60)", _settingYellDuring.GetType(), _settingYellDuring)
@@ -263,86 +277,105 @@ namespace PRoConEvents
 
         public void SetPluginVariable(string strVariable, string strValue)
         {
+            bool layerReady = (DateTime.UtcNow - _layerStartingTime).TotalSeconds > 30;
             DebugWrite("[SetPluginVariable] Variable: " + strVariable + " Value: " + strValue, 4);
 
-            if (Regex.Match(strVariable, @"Debug level").Success){
+            if (Regex.Match(strVariable, @"Debug level").Success)
+            {
                 int tmp;
                 int.TryParse(strValue, out tmp);
-                if (tmp >= 0 && tmp <= 4){
+                if (tmp >= 0 && tmp <= 4)
+                {
                     _fDebugLevel = tmp;
                 }
-                else{
-                    ConsoleError("Invalid value for Debug Level: '" + strValue + "'. It must be a number between 1 and 4. (e.g.: 3)");
+                else
+                {
+                    ConsoleError("Invalid value for Debug Level: '" + strValue +
+                                 "'. It must be a number between 1 and 4. (e.g.: 3)");
                 }
             }
-            else if (Regex.Match(strVariable, @"Host").Success){
-                if (_fIsEnabled && !_firstCheck){
+            else if (Regex.Match(strVariable, @"Host").Success)
+            {
+                if (_fIsEnabled && layerReady && _firstCheck)
+                {
                     ConsoleError("SQL Settings locked! Please disable the Plugin and try again...");
                     return;
                 }
 
-                if (strValue.Length <= 100){
+                if (strValue.Length <= 100)
+                {
                     _settingStrSqlHostname = strValue.Replace(Environment.NewLine, "");
                 }
             }
-            else if (Regex.Match(strVariable, @"Port").Success){
-                if (_fIsEnabled && !_firstCheck){
+            else if (Regex.Match(strVariable, @"Port").Success)
+            {
+                if (_fIsEnabled && layerReady && _firstCheck)
+                {
                     ConsoleError("SQL Settings locked! Please disable the Plugin and try again...");
                     return;
                 }
-
-                int tmpPort;
-                int.TryParse(strValue, out tmpPort);
-                if (tmpPort > 0 && tmpPort < 65536){
+                int.TryParse(strValue, out int tmpPort);
+                if (tmpPort > 0 && tmpPort < 65536)
+                {
                     _settingStrSqlPort = tmpPort.ToString();
                 }
-                else{
-                    ConsoleError("Invalid value for MySQL Port: '" + strValue + "'. Port must be a number between 1 and 65535. (e.g.: 3306)");
+                else
+                {
+                    ConsoleError("Invalid value for MySQL Port: '" + strValue +
+                                 "'. Port must be a number between 1 and 65535. (e.g.: 3306)");
                 }
             }
-            else if (Regex.Match(strVariable, @"Database").Success){
-                if (_fIsEnabled && !_firstCheck){
+            else if (Regex.Match(strVariable, @"Database").Success)
+            {
+                if (_fIsEnabled && layerReady && _firstCheck)
+                {
                     ConsoleError("SQL Settings locked! Please disable the Plugin and try again...");
                     return;
                 }
-
-                if (strValue.Length <= 100){
+                if (strValue.Length <= 100)
+                {
                     _settingStrSqlDatabase = strValue.Replace(Environment.NewLine, "");
                 }
             }
-            else if (Regex.Match(strVariable, @"Username").Success){
-                if (_fIsEnabled && !_firstCheck){
+            else if (Regex.Match(strVariable, @"Username").Success)
+            {
+                if (_fIsEnabled && layerReady && _firstCheck)
+                {
                     ConsoleError("SQL Settings locked! Please disable the Plugin and try again...");
                     return;
                 }
-
-                if (strValue.Length <= 100){
+                if (strValue.Length <= 100)
+                {
                     _settingStrSqlUsername = strValue.Replace(Environment.NewLine, "");
                 }
             }
-            else if (Regex.Match(strVariable, @"Password").Success){
-                if (_fIsEnabled && !_firstCheck){
+            else if (Regex.Match(strVariable, @"Password").Success)
+            {
+                if (_fIsEnabled && layerReady && _firstCheck)
+                {
                     ConsoleError("SQL Settings locked! Please disable the Plugin and try again...");
                     return;
                 }
-
-                if (strValue.Length <= 100){
+                if (strValue.Length <= 100)
+                {
                     _settingStrSqlPassword = strValue.Replace(Environment.NewLine, "");
                 }
             }
-            else if (Regex.Match(strVariable, @"During for Yell and PYell in sec").Success){
-                int tmpyelltime;
-                int.TryParse(strValue, out tmpyelltime);
-                if (tmpyelltime >= 5 && tmpyelltime <= 60){
+            else if (Regex.Match(strVariable, @"During for Yell and PYell in sec").Success)
+            {
+                int.TryParse(strValue, out int tmpyelltime);
+                if (tmpyelltime >= 5 && tmpyelltime <= 60)
+                {
                     _settingYellDuring = tmpyelltime;
                 }
-                else{
+                else
+                {
                     ConsoleError("Invalid value for Yell During. Time must be a number between 5 and 60. (e.g.: 15)");
                 }
             }
-
             else if (Regex.Match(strVariable, @"Help Menu").Success) _cmdHelp = strValue;
             else if (Regex.Match(strVariable, @"View Admins Online").Success) _cmdAdminsOnline = strValue;
+            else if (Regex.Match(strVariable, @"Commit a suicide").Success) _cmdKillMe = strValue;
             else if (Regex.Match(strVariable, @"Say").Success) _cmdSay = strValue;
             else if (Regex.Match(strVariable, @"Playersay").Success) _cmdPlayerSay = strValue;
             else if (Regex.Match(strVariable, @"Yell").Success) _cmdYell = strValue;
@@ -355,10 +388,10 @@ namespace PRoConEvents
             else if (Regex.Match(strVariable, @"Ban").Success) _cmdBan = strValue;
             else if (Regex.Match(strVariable, @"Unban").Success) _cmdUnban = strValue;
             else if (Regex.Match(strVariable, @"Lookup").Success) _cmdLookup = strValue;
+            else if (Regex.Match(strVariable, @"Set player group").Success) _cmdPutGroup = strValue;
             else if (Regex.Match(strVariable, @"Confirm").Success) _cmdConfirm = strValue;
             
             RegisterIngameCommands();
-            
         }
 
         public string GetPluginName()
@@ -414,9 +447,14 @@ namespace PRoConEvents
         {
             _fIsEnabled = true;
             _firstCheck = false;
+            _mDicPlayerInfo.Clear();
+            _mAuthPlayerInfo.Clear();
+            _mIngameCommands.Clear();
+            _lCursedPlayers.Clear();
+            _lAdminsOnline.Clear();
             ExecuteCommand("procon.protected.send", "admin.listPlayers", "all");
-            BuildRequiredTables();
             RegisterIngameCommands();
+            ExecuteCommand("procon.protected.tasks.add", "InfinityPlugin", "3", "9", "20", "procon.protected.plugins.call", "InfinityPlugin", "PluginStarter");
             ConsoleWrite("Enabled!");
         }
 
@@ -577,14 +615,16 @@ namespace PRoConEvents
         #region COMMANDS
         //////////////////////
 
-        private bool IsAdmin(string name)
+        private bool HadCommandPrivileges(string name, Command cmd)
         {
-            return IsAuthenticated(name) && _mAuthPlayerInfo[name].UserGroup != 0;
-        }
-
-        private bool HasAdminPrivileges(string name)
-        {
-            if (IsAdmin(name)) return true;
+            if (!IsAuthenticated(name))
+            {
+                PlayerSayMsg(name, "You are not authenticated yet. Please try again later");
+                return false;
+            }
+            AuthSoldier client = _mAuthPlayerInfo[name];
+            if (client.UserGroup >= cmd.UserGroupId)
+                return true;
             PlayerSayMsg(name, "You do not have enough permission to use this command");
             return false;
         }
@@ -596,93 +636,105 @@ namespace PRoConEvents
             if (!string.IsNullOrEmpty(_cmdConfirm))
             {
                 _mIngameCommands.Add(_cmdConfirm,
-                    new Command(_cmdConfirm, "confirmation", "", false, 0, false, 0, OnCommandConfirm));
+                    new Command(_cmdConfirm, "confirmation", "", UserGroup.User, 0, false, 0, OnCommandConfirm));
             }
 
             if (!string.IsNullOrEmpty(_cmdHelp))
             {
                 _mIngameCommands.Add(_cmdHelp,
-                    new Command(_cmdHelp, "display available commands", "", false, 0, false, 0, OnCommandHelp));
+                    new Command(_cmdHelp, "display available commands", "", UserGroup.User, 0, false, 0, OnCommandHelp));
             }
 
             if (!string.IsNullOrEmpty(_cmdAdminsOnline))
             {
                 _mIngameCommands.Add(_cmdAdminsOnline,
-                    new Command(_cmdAdminsOnline, "show admins online", "", false, 0, false, 0, OnCommandAdminsOnline));
+                    new Command(_cmdAdminsOnline, "show admins online", "", UserGroup.User, 0, false, 0, OnCommandAdminsOnline));
+            }            
+            
+            if (!string.IsNullOrEmpty(_cmdKillMe))
+            {
+                _mIngameCommands.Add(_cmdKillMe,
+                    new Command(_cmdKillMe, "commit a suicide", "", UserGroup.Vip, 0, false, 0, OnCommandKillMe));
             }
 
             if (!string.IsNullOrEmpty(_cmdSay))
             {
                 _mIngameCommands.Add(_cmdSay,
-                    new Command(_cmdSay, "say a message as server", "<message>", true, 1, false, 0, OnCommandSay));
+                    new Command(_cmdSay, "say a message as server", "<message>", UserGroup.Admin, 1, false, 0, OnCommandSay));
             }
 
             if (!string.IsNullOrEmpty(_cmdPlayerSay))
             {
                 _mIngameCommands.Add(_cmdPlayerSay,
-                    new Command(_cmdPlayerSay, "say a message to a player", "<player> <message>", true, 2, false, 1, OnCommandPlayerSay));
+                    new Command(_cmdPlayerSay, "say a message to a player", "<player> <message>", UserGroup.Admin, 2, false, 1, OnCommandPlayerSay));
             }
 
             if (!string.IsNullOrEmpty(_cmdYell))
             {
                 _mIngameCommands.Add(_cmdYell,
-                    new Command(_cmdYell, "yell a message as server", "<message>", true, 1, false, 0, OnCommandYell));
+                    new Command(_cmdYell, "yell a message as server", "<message>", UserGroup.Admin, 1, false, 0, OnCommandYell));
             }
 
             if (!string.IsNullOrEmpty(_cmdPlayerYell))
             {
                 _mIngameCommands.Add(_cmdPlayerYell,
-                    new Command(_cmdPlayerYell, "yell a message to a player", "<player> <message>", true, 2, false, 1, OnCommandPlayerYell));
+                    new Command(_cmdPlayerYell, "yell a message to a player", "<player> <message>", UserGroup.Admin, 2, false, 1, OnCommandPlayerYell));
             }
 
             if (!string.IsNullOrEmpty(_cmdSwap))
             {
                 _mIngameCommands.Add(_cmdSwap,
-                    new Command(_cmdSwap, "swap 2 players", "<player>", true, 2, false, 2, OnCommandSwap));
+                    new Command(_cmdSwap, "swap 2 players", "<player>", UserGroup.Admin, 2, false, 2, OnCommandSwap));
             }
             
             if (!string.IsNullOrEmpty(_cmdKill))
             {
                 _mIngameCommands.Add(_cmdKill,
-                    new Command(_cmdKill, "kill a player", "<player> <reason>", true, 1, true, 1, OnCommandKill));
+                    new Command(_cmdKill, "kill a player", "<player> <reason>", UserGroup.Admin, 1, true, 1, OnCommandKill));
             }
             
             if (!string.IsNullOrEmpty(_cmdCurse))
             {
                 _mIngameCommands.Add(_cmdCurse,
-                    new Command(_cmdCurse, "curse a player", "<@uid/player> <reason>", true, 1, true, 1, true, OnCommandCurse));
+                    new Command(_cmdCurse, "curse a player", "<@uid/player> <reason>", UserGroup.Admin, 1, true, 1, true, OnCommandCurse));
             }
             
             if (!string.IsNullOrEmpty(_cmdUncurse))
             {
                 _mIngameCommands.Add(_cmdUncurse,
-                    new Command(_cmdUncurse, "uncurse a player", "<@uid/player>", true, 1, true, 1, true, OnCommandUnCurse));
+                    new Command(_cmdUncurse, "uncurse a player", "<@uid/player>", UserGroup.Admin, 1, true, 1, true, OnCommandUnCurse));
             }
             
             if (!string.IsNullOrEmpty(_cmdKick))
             {
                 _mIngameCommands.Add(_cmdKick,
-                    new Command(_cmdKick, "kick a player", "<player> <reason>", true, 1, true, 1, OnCommandKick));
+                    new Command(_cmdKick, "kick a player", "<player> <reason>", UserGroup.Admin, 1, true, 1, OnCommandKick));
             }
             
             if (!string.IsNullOrEmpty(_cmdBan))
             {
                 _mIngameCommands.Add(_cmdBan,
-                    new Command(_cmdBan, "ban a player", "<@uid/player> <reason>", true, 1, true, 1, true, OnCommandBan));
+                    new Command(_cmdBan, "ban a player", "<@uid/player> <reason>", UserGroup.Admin, 1, true, 1, true, OnCommandBan));
             }
             
             if (!string.IsNullOrEmpty(_cmdUnban))
             {
                 _mIngameCommands.Add(_cmdUnban,
-                    new Command(_cmdUnban, "unban a player", "<@uid>", true, 1, true, 0, true, OnCommandUnBan));
+                    new Command(_cmdUnban, "unban a player", "<@uid>", UserGroup.Admin, 1, true, 0, true, OnCommandUnBan));
             }
             
             if (!string.IsNullOrEmpty(_cmdLookup))
             {
                 _mIngameCommands.Add(_cmdLookup,
-                    new Command(_cmdLookup, "search a player in database", "<@uid|name>", true, 1, true, 0, true ,OnCommandLookUp));
+                    new Command(_cmdLookup, "search a player in database", "<@uid/name>", UserGroup.Admin, 1, true, 0, true, OnCommandLookUp));
             }
             
+            if (!string.IsNullOrEmpty(_cmdPutGroup))
+            {
+                _mIngameCommands.Add(_cmdPutGroup,
+                    new Command(_cmdPutGroup, "put user in specified group", "<@uid/name>", UserGroup.SuperAdmin, 1, true, 1, true, OnCommandPutGroup));
+            }
+
         }
 
         private void CommandHandler(string speaker, string message)
@@ -696,11 +748,17 @@ namespace PRoConEvents
             string arguments = match.Groups["arguments"].Value;
 
             if (!_mIngameCommands.ContainsKey(invoke)) return;
-            if (_mIngameCommands[invoke].IsAdmin && !HasAdminPrivileges(speaker)) return;
-
             Command cmd = _mIngameCommands[invoke];
+            if (!HadCommandPrivileges(speaker, cmd)) return;
             CapturedCommand capturedCommand = new CapturedCommand(scope, invoke, arguments);
 
+
+            if (invoke.Equals("iamowner", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(arguments))
+            {
+                OnCommandIAmOwner(speaker, capturedCommand);
+                return;
+            }
+            
             if (cmd.MinArgs > 0)
             {
                 if (string.IsNullOrEmpty(arguments))
@@ -714,13 +772,16 @@ namespace PRoConEvents
             int uid = 0;
             if (cmd.CanAcceptUid && arguments.StartsWith("@"))
             {
-                string id = arguments.Split(' ').FirstOrDefault()?.Replace("@", "");
+                string[] split = arguments.Split(' ');
+                string id = split.FirstOrDefault()?.Replace("@", "");
                 int.TryParse(id, out uid);
             }
             
             if (uid > 0)
             {
                 capturedCommand.UserId = uid;
+                string[] strings = arguments.Split(' ').Skip(1).ToArray();
+                capturedCommand.ExtraArguments = string.Join(" ", strings);
                 DebugWrite("[CommandHandler] Command with UID - " + scope + invoke + " @" + uid, 4);
             }
 
@@ -746,6 +807,22 @@ namespace PRoConEvents
             }
 
             cmd.HandleMethod.Invoke(speaker, capturedCommand);
+        }
+        
+        private void OnCommandIAmOwner(string strSpeaker, CapturedCommand capCommand)
+        {
+            DebugWrite("[COMMAND] [IAMOWNER] - speaker: " + strSpeaker, 2);
+            if (!string.IsNullOrEmpty(capCommand.ExtraArguments)) return;
+            bool ownerExists = CheckOwnerExists();
+            if (ownerExists)
+            {
+                PlayerSayMsg(strSpeaker, "Oops! I already have my master setup");
+                return;
+            }
+            string message = PutGroup(_mAuthPlayerInfo[strSpeaker].Id, UserGroup.Admin)
+                ? "You are now my master. Type !help for available commands"
+                : "Err! There was some error connecting to the database";
+            PlayerSayMsg(strSpeaker, message);
         }
 
         private void OnCommandConfirm(string strSpeaker, CapturedCommand capCommand)
@@ -776,11 +853,8 @@ namespace PRoConEvents
             {
                 DebugWrite("[COMMAND] [HELP] - " + strSpeaker, 2);
                 string message = "[Available Commands] - ";
-                string[] adminCommands = _mIngameCommands.Keys.Where(i => _mIngameCommands[i].IsAdmin).ToArray();
-                string[] userCommands = _mIngameCommands.Keys.Where(i => !_mIngameCommands[i].IsAdmin).ToArray();
-
-                message += string.Join(", ", userCommands);
-                if (IsAdmin(strSpeaker)) message += ", " + string.Join(", ", adminCommands);
+                string[] availableCommands = _mIngameCommands.Keys.Where(i => _mIngameCommands[i].UserGroupId <= _mAuthPlayerInfo[strSpeaker].UserGroup).ToArray();
+                message += string.Join(", ", availableCommands);
                 PlayerSayMsg(strSpeaker, message);
             }
             else
@@ -791,11 +865,7 @@ namespace PRoConEvents
                 if (_mIngameCommands.ContainsKey(cmdName.ToLower()))
                 {
                     Command cmd = _mIngameCommands[cmdName.ToLower()];
-                    if (cmd.IsAdmin)
-                    {
-                        if (!IsAdmin(strSpeaker)) return;
-                    }
-
+                    if (cmd.UserGroupId > _mAuthPlayerInfo[strSpeaker].UserGroup) return;
                     PlayerSayMsg(strSpeaker, cmd.GetHelp());
                 }
                 else
@@ -818,6 +888,13 @@ namespace PRoConEvents
                 string admins = string.Join(", ", _lAdminsOnline);
                 PlayerSayMsg(strSpeaker, "Admins Online: " + admins);
             }
+        }
+        
+        private void OnCommandKillMe(string strSpeaker, CapturedCommand capCommand)
+        {
+            DebugWrite("[COMMAND] [KILLME] - " + strSpeaker, 2);
+            if (string.IsNullOrEmpty(capCommand.ExtraArguments)) return;
+            Kill(strSpeaker);
         }
 
         private void OnCommandSay(string strSpeaker, CapturedCommand capCommand)
@@ -945,7 +1022,7 @@ namespace PRoConEvents
                 if (!IsPlayerInfoCached(target)) return;
                 if (!IsAuthenticated(target))
                 {
-                    PlayerSayMsg(target, "Failed to authenticate player. Try again later");
+                    PlayerSayMsg(strSpeaker, "Failed to authenticate player. Try again later");
                     return;
                 }
                 if (_lCursedPlayers.Contains(target))
@@ -1011,7 +1088,7 @@ namespace PRoConEvents
 
                 if (!IsAuthenticated(target))
                 {
-                    PlayerSayMsg(target, "Failed to authenticate player. Try again later");
+                    PlayerSayMsg(strSpeaker, "Failed to authenticate player. Try again later");
                     return;
                 }
 
@@ -1086,7 +1163,7 @@ namespace PRoConEvents
                 if (!IsPlayerInfoCached(target)) return;
                 if (!IsAuthenticated(target))
                 {
-                    PlayerSayMsg(target, "Failed to authenticate player. Try again later");
+                    PlayerSayMsg(strSpeaker, "Failed to authenticate player. Try again later");
                     return;
                 }
                 AuthSoldier adminData = _mAuthPlayerInfo[strSpeaker];
@@ -1166,6 +1243,78 @@ namespace PRoConEvents
             }
         }
 
+        private void OnCommandPutGroup(string strSpeaker, CapturedCommand capCommand)
+        {
+            UserGroup group;
+            try
+            {
+                group = (UserGroup) Enum.Parse(typeof(UserGroup), capCommand.ExtraArguments, true);
+            }
+            catch (Exception)
+            {
+                PlayerSayMsg(strSpeaker, "Did you enter a valid group?");
+                return;
+            }
+
+            bool success;
+            string target;
+
+            if (capCommand.UserId > 0)
+            {
+                DebugWrite("[COMMAND] [PUTGROUP] - Admin: " + strSpeaker + " UserId: " + group, 2);
+                AuthSoldier client = LookupClient(capCommand.UserId);
+                target = client.SoldierName;
+                if (string.IsNullOrEmpty(target))
+                {
+                    PlayerSayMsg(strSpeaker, "No users found with userId: " + capCommand.UserId);
+                    return;
+                }
+
+                if (client.UserGroup == (int) group)
+                {
+                    PlayerSayMsg(strSpeaker, target + " is already a " + group);
+                    return;
+                }
+
+                success = PutGroup(client.Id, group);
+                if (success)
+                {
+                    KeyValuePair<string, AuthSoldier> match = _mAuthPlayerInfo.First(kvp => kvp.Value.Id == capCommand.UserId);
+                    match.Value.UserGroup = (int) group;
+                    if (group > UserGroup.Vip) _lAdminsOnline.Add(match.Key);
+                }
+            }
+            else
+            {
+                target = capCommand.MatchedArguments[0].Argument;
+                DebugWrite("[COMMAND] [PUTGROUP] - Admin: " + strSpeaker + " Target: " + target, 2);
+                if (!IsPlayerInfoCached(target)) return;
+                if (!IsAuthenticated(target))
+                {
+                    PlayerSayMsg(strSpeaker, "Failed to authenticate player. Try again later");
+                    return;
+                }
+
+                AuthSoldier targetData = _mAuthPlayerInfo[target];
+                success = PutGroup(targetData.Id, group);
+                if (success)
+                {
+                    _mAuthPlayerInfo[target].UserGroup = (int) group;
+                    if (group > UserGroup.Vip) _lAdminsOnline.Add(target);
+                }
+            }
+
+            if (success)
+            {
+                string message = target + " is put in group " + group + " by " + strSpeaker;
+                SayMsg(message);
+            }
+            else
+            {
+                PlayerSayMsg(strSpeaker, "Failed to put " + target + " in " + group + "!");
+            }
+        }
+
         #endregion
 
         //////////////////////
@@ -1176,15 +1325,71 @@ namespace PRoConEvents
         {
             LogWrite("^1Message: " + myException.Message + "^0");
             LogWrite("^1Native: " + myException.ErrorCode + "^0");
-            if (myException.Source != null) LogWrite("^1Source: " + myException.Source + "^0");
-            if (myException.StackTrace != null) LogWrite("^1StackTrace: " + myException.StackTrace + "^0");
-            if (myException.InnerException != null) LogWrite("^1InnerException: " + myException.InnerException + "^0");
+            if (myException.Source != null) DebugWrite("^1Source: " + myException.Source + "^0", 4);
+            if (myException.StackTrace != null) DebugWrite("^1StackTrace: " + myException.StackTrace + "^0", 4);
+            if (myException.InnerException != null) DebugWrite("^1InnerException: " + myException.InnerException + "^0", 4);
+        }
+
+        public void CheckSettingsSql()
+        {
+            // basic checks after plugin enabled
+            // check 1. sql logins
+            DebugWrite("[Task] [Check] Checking SQL Settings", 4);
+            if (!_fIsEnabled || !SqlLoginOk()) { return; }
+            
+            // check 2. sql database connection
+            DebugWrite("[Task] [Check] Try to connect to SQL Server", 4);
+            try
+            {
+                using (MySqlConnection conn = new MySqlConnection(SqlLogin()))
+                {
+                    conn.Open();
+                    DebugWrite("[Task] [Check] Test Connection to SQL was successfully", 4);
+                    if (conn.State == ConnectionState.Open)
+                    {
+                        DebugWrite("[Task] [Check] Close SQL Connection (Con)", 4);
+                        conn.Close();
+                    }
+                }
+                _firstCheck = true;
+                BuildRequiredTables();
+            }
+            catch (Exception ex)
+            {
+                ConsoleError("[Task] [Check] FATAL ERROR: CAN NOT CONNECT TO SQL SERVER! Please check your Plugin settings 'SQL Server Details' (Host IP, Port, Database, Username, PW) and try again. Maybe the provider of your Procon Layer block the connection (server firewall settings).");
+                ConsoleError("[Task] [Check] Error (Con): " + ex);
+                ConsoleError("[Task] [Check] Error");
+                ConsoleError("[Task] [Check] Shutdown Plugin...");
+                ExecuteCommand("procon.protected.plugins.enable", "InfinityPlugin", "False");
+            }
         }
 
         private string SqlLogin()
         {
             return "Server=" + _settingStrSqlHostname + ";" + "Port=" + _settingStrSqlPort + ";" + "Database=" + _settingStrSqlDatabase + ";" + "Uid=" + _settingStrSqlUsername +
                    ";" + "Pwd=" + _settingStrSqlPassword + ";" + "Connection Timeout=5;";
+        }
+
+        private bool SqlLoginOk()
+        {
+            if (!string.IsNullOrEmpty(_settingStrSqlHostname) && !string.IsNullOrEmpty(_settingStrSqlPort) && !string.IsNullOrEmpty(_settingStrSqlDatabase) &&
+                !string.IsNullOrEmpty(_settingStrSqlUsername) && !string.IsNullOrEmpty(_settingStrSqlPassword))
+            {
+                return true;
+            }
+            else
+            {
+                ConsoleWrite("[SqlLoginDetails]^8^b SQL Server Details not completed (Host IP, Port, Database, Username, PW). Please check your Plugin settings.^0^n");
+                DebugWrite(
+                    "[SqlLoginDetails] SQL Details: Host=`" + _settingStrSqlHostname + "` ; Port=`" + _settingStrSqlPort + "` ; Database=`" + _settingStrSqlDatabase +
+                    "` ; Username=`" + _settingStrSqlUsername + "` ; Password=`" + _settingStrSqlPassword + "`", 2);
+                if (_fIsEnabled)
+                {
+                    ExecuteCommand("procon.protected.plugins.enable", "InfinityPlugin", "False");
+                }
+
+                return false;
+            }
         }
 
         private DataTable SqlQuery(MySqlCommand query, string debugFunction)
@@ -1291,18 +1496,48 @@ namespace PRoConEvents
 
         private void BuildRequiredTables()
         {
-            const string clientsTable = @"CREATE TABLE IF NOT EXISTS `clients` (
+            bool clientsTableExists = false;
+            bool aliasesTableExists = false;
+            bool penaltiesTableExists = false;
+            bool groupsTableExists = false;
+            const string query = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA=@Database";
+            using (MySqlCommand myCmd = new MySqlCommand(query))
+            {
+                myCmd.Parameters.AddWithValue("@Database", _settingStrSqlDatabase);
+                DataTable resultTable = SqlQuery(myCmd, "BuildRequiredTables");
+
+                foreach (DataRow row in resultTable.Rows)
+                {
+                    string table = row["TABLE_NAME"].ToString();
+                    if (table.Equals("clients")) clientsTableExists = true;
+                    if (table.Equals("aliases")) aliasesTableExists = true;
+                    if (table.Equals("penalties")) penaltiesTableExists = true;
+                    if (table.Equals("groups")) groupsTableExists = true;
+                }
+            }
+
+            bool creationStatus = true;
+            if (!clientsTableExists)
+            {
+                ConsoleWrite("Creating clients table");
+                const string clientsTable = @"CREATE TABLE IF NOT EXISTS `clients` (
                                     `id` INT( 11 ) NOT NULL AUTO_INCREMENT,
                                     `name` VARCHAR( 50 ) DEFAULT NULL,
                                     `guid` VARCHAR( 35 ) DEFAULT NULL,
-				    `user_group` INT( 1 ) NOT NULL DEFAULT 0,
-				    `penalty_type` INT( 1 ) DEFAULT 0,
+				                    `user_group` INT( 1 ) NOT NULL DEFAULT 0,
+				                    `penalty_type` INT( 1 ) DEFAULT 0,
                                     `time_add` INT ( 11 ) NOT NULL DEFAULT 0,
                                     `time_edit` INT ( 11 ) NOT NULL DEFAULT 0,
                                     PRIMARY KEY ( `id` )
                                     ) ENGINE = INNODB DEFAULT CHARSET = utf8;";
+                
+                if (!SqlNonQuery(clientsTable, "Clients-Table")) creationStatus = false;
+            }
 
-            const string penaltiesTable = @"CREATE TABLE IF NOT EXISTS `penalties` (
+            if (creationStatus && !aliasesTableExists)
+            {
+                ConsoleWrite("Creating aliases table");
+                const string penaltiesTable = @"CREATE TABLE IF NOT EXISTS `penalties` (
                                     `id` INT( 11 ) NOT NULL AUTO_INCREMENT,
                                     `type` INT( 1 ) DEFAULT 0,
                                     `client_id` INT( 11 ) NOT NULL,
@@ -1313,27 +1548,52 @@ namespace PRoConEvents
                                     `time_edit` INT ( 11 ) NOT NULL DEFAULT 0,
                                     PRIMARY KEY ( `id` )
                                     ) ENGINE = INNODB DEFAULT CHARSET = utf8;";
+                if (!SqlNonQuery(penaltiesTable, "Penalties-Table")) creationStatus = false;
+            }
 
-            const string aliasesTable = @"CREATE TABLE IF NOT EXISTS `aliases` (
+            if (creationStatus && !penaltiesTableExists)
+            {
+                ConsoleWrite("Creating penalties table");
+                const string aliasesTable = @"CREATE TABLE IF NOT EXISTS `aliases` (
                                     `id` INT( 11 ) NOT NULL AUTO_INCREMENT,
                                     `alias` VARCHAR( 50 ) DEFAULT NULL,
                                     `client_id` INT( 11 ) NOT NULL,
                                     `time_add` INT ( 11 ) NOT NULL DEFAULT 0,
                                     PRIMARY KEY ( `id` )
                                     ) ENGINE = INNODB DEFAULT CHARSET = utf8;";
-
-            bool sqlOk1 = SqlNonQuery(clientsTable, "BuildRequiredTables");
-            bool sqlOk2 = SqlNonQuery(penaltiesTable, "BuildRequiredTables");
-            bool sqlOk3 = SqlNonQuery(aliasesTable, "BuildRequiredTables");
-
-            if (!sqlOk1 || !sqlOk2 || !sqlOk3)
-            {
-                ConsoleError("[SQL-BuildRequiredTables] Failed to create required tables");
-                return;
+                if (!SqlNonQuery(aliasesTable, "Aliases-Table")) creationStatus = false;
             }
 
+            if (creationStatus && !groupsTableExists)
+            {
+                ConsoleWrite("Creating groups table");
+                const string groups = @"CREATE TABLE IF NOT EXISTS `groups` (
+                                    `id` INT( 11 ) NOT NULL,
+                                    `name` VARCHAR(32) NOT NULL DEFAULT '',
+                                    `level` INT( 11 ) NOT NULL DEFAULT 0,
+                                    PRIMARY KEY (`id`),
+                                    KEY `level` (`level`)
+                                    ) ENGINE = INNODB DEFAULT CHARSET = utf8;" +
+                                      "INSERT INTO `groups` (`id`, `name`, `level`) VALUES (0, 'User', 0);" +
+                                      "INSERT INTO `groups` (`id`, `name`, `level`) VALUES (1, 'Vip', 1);" +
+                                      "INSERT INTO `groups` (`id`, `name`, `level`) VALUES (2, 'Admin', 60);" +
+                                      "INSERT INTO `groups` (`id`, `name`, `level`) VALUES (3, 'Super Admin', 80);" +
+                                      "INSERT INTO `groups` (`id`, `name`, `level`) VALUES (4, 'Owner', 100);";
+
+                if (!SqlNonQuery(groups, "Groups-Table")) creationStatus = false;
+
+            }
+            
+            if (!creationStatus)
+            {
+                ConsoleError("[Task] [Check] Failed to create required tables");
+                ConsoleError("[Task] [Check] Shutdown Plugin...");
+                ExecuteCommand("procon.protected.plugins.enable", "InfinityPlugin", "False");
+                return;
+            }
+            
             _tableExists = true;
-            DebugWrite("[SQL-BuildRequiredTables] Tables Created", 4);
+            ConsoleWrite("Required Tables Exists/Created");
         }
 
         private AuthSoldier RetrieveSoldierData(string name)
@@ -1556,12 +1816,59 @@ namespace PRoConEvents
             return names;
         }
 
+        private bool PutGroup(int uid, UserGroup group)
+        {
+            if (!_tableExists) return false;
+            int groupId = (int) group;
+            const string sql2 = "UPDATE clients SET user_group = @GroupId WHERE id = @Id;";
+            using (MySqlCommand myCmd = new MySqlCommand(sql2))
+            {
+                myCmd.Parameters.AddWithValue("@GroupId", groupId);
+                myCmd.Parameters.AddWithValue("@Id", uid);
+                return SqlNonQuery(myCmd, "PutGroup");
+            }
+        }
+
+        private bool CheckOwnerExists()
+        {
+            if (!_tableExists) return false;
+            const string query = @"SELECT * FROM `clients` WHERE user_group = 100 LIMIT 1";
+            using (MySqlCommand myCmd = new MySqlCommand(query))
+            {
+                SqlQuery(myCmd, "CheckOwnerExists");
+                DataTable resultTable = SqlQuery(myCmd, "LookupClient");
+                if (resultTable.Rows.Count > 0)
+                {
+                    DebugWrite("[SQL-CheckOwnerExists]: No owner found", 4);
+                    return true;
+                }
+                DebugWrite("[SQL-CheckOwnerExists]: Owner already exists", 4);
+                return false;
+            }
+        }
+
         #endregion
 
         //////////////////////
         #region HELPER Functions
         //////////////////////
 
+        public void PluginStarter()
+        {
+            if (!_firstCheck && _fIsEnabled)
+            {
+                // wait a little bit after layer restart
+                DebugWrite("[Task] [PluginStarter] Layer restart detected. Warmup...", 4);
+                if ((DateTime.UtcNow - _layerStartingTime).TotalSeconds > 30)
+                {
+                    Thread threadWorker1 = new Thread(new ThreadStart(delegate() { CheckSettingsSql(); }));
+                    threadWorker1.IsBackground = true;
+                    threadWorker1.Name = "threadworker1";
+                    threadWorker1.Start();
+                }
+            }
+        }
+        
         private static long GetTimeEpoch()
         {
             return ((DateTimeOffset) DateTime.Now).ToUnixTimeSeconds();
@@ -1741,6 +2048,24 @@ namespace PRoConEvents
         #region MODEL CLASSES & ENUMS
         //////////////////////
 
+        private enum Penalty
+        {
+            Warn = 1,
+            Kill = 2,
+            Curse = 3,
+            Kick = 4,
+            Ban = 5
+        }
+        
+        private enum UserGroup
+        {
+            User = 0,
+            Vip = 1,
+            Admin = 60,
+            SuperAdmin = 80,
+            Owner = 100
+        }
+        
         private class AuthSoldier
         {
             public AuthSoldier()
@@ -1763,20 +2088,11 @@ namespace PRoConEvents
 
             public string SoldierName { get; }
 
-            public int UserGroup { get; }
+            public int UserGroup { get; set; }
 
             public int PenaltyType { get; }
         }
-
-        private enum Penalty
-        {
-            Warn = 1,
-            Kill = 2,
-            Curse = 3,
-            Kick = 4,
-            Ban = 5
-        }
-
+        
         private class Command
         {
             private string Invoke { get; }
@@ -1785,7 +2101,7 @@ namespace PRoConEvents
 
             private string Usage { get; }
 
-            public bool IsAdmin { get; }
+            public int UserGroupId { get; }
 
             public bool RequiresConfirmation { get; }
 
@@ -1797,13 +2113,13 @@ namespace PRoConEvents
 
             public Action<string, CapturedCommand> HandleMethod { get; }
 
-            public Command(string invoke, string help, string usage, bool isAdmin, int minArgs, bool requiresConfirmation, int argsSoldiers,
+            public Command(string invoke, string help, string usage, UserGroup group, int minArgs, bool requiresConfirmation, int argsSoldiers,
                 Action<string, CapturedCommand> handleMethod)
             {
                 Invoke = invoke;
                 Help = help;
                 Usage = usage;
-                IsAdmin = isAdmin;
+                UserGroupId = (int) group;
                 RequiresConfirmation = requiresConfirmation;
                 MinArgs = minArgs;
                 ArgsSoldiers = argsSoldiers;
@@ -1811,13 +2127,13 @@ namespace PRoConEvents
                 HandleMethod = handleMethod;
             }
 
-            public Command(string invoke, string help, string usage, bool isAdmin, int minArgs, bool requiresConfirmation, int argsSoldiers, bool canAcceptUid,
+            public Command(string invoke, string help, string usage, UserGroup group, int minArgs, bool requiresConfirmation, int argsSoldiers, bool canAcceptUid,
                 Action<string, CapturedCommand> handleMethod)
             {
                 Invoke = invoke;
                 Help = help;
                 Usage = usage;
-                IsAdmin = isAdmin;
+                UserGroupId = (int) group;
                 RequiresConfirmation = requiresConfirmation;
                 MinArgs = minArgs;
                 ArgsSoldiers = argsSoldiers;
@@ -1948,13 +2264,13 @@ namespace PRoConEvents
 
         public class CapturedCommand
         {
-            public string ResponseScope { get; private set; }
+            public string ResponseScope { get; }
 
-            public string Invoke { get; private set; }
+            public string Invoke { get; }
 
-            public List<MatchArgument> MatchedArguments { get; private set; }
+            public List<MatchArgument> MatchedArguments { get; }
 
-            public string ExtraArguments { get; private set; }
+            public string ExtraArguments { get; set; }
 
             public int UserId { get; set; }
 
