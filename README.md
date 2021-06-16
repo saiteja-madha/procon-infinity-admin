@@ -35,3 +35,8 @@ A simple procon plugin that uses MySQL database the sync admins and penalities a
 ### FAQ
 - Command Prefixes: `! @ /`
 - Avaliable User Groups: `user`, `vip`, `admin`, `superadmin`, `owner`
+
+### Known Issues
+- [ ] admins can kill/kick/ban each other
+- [ ] !lookup doesn't check for aliases
+- [ ] ban command can be used on self
