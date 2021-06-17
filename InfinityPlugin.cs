@@ -746,18 +746,17 @@ namespace PRoConEvents
             string scope = match.Groups["scope"].Value;
             string invoke = match.Groups["command"].Value.ToLower();
             string arguments = match.Groups["arguments"].Value;
+            
+            if (invoke.Equals("iamowner", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(arguments))
+            {
+                OnCommandIAmOwner(speaker);
+                return;
+            }
 
             if (!_mIngameCommands.ContainsKey(invoke)) return;
             Command cmd = _mIngameCommands[invoke];
             if (!HadCommandPrivileges(speaker, cmd)) return;
             CapturedCommand capturedCommand = new CapturedCommand(scope, invoke, arguments);
-
-
-            if (invoke.Equals("iamowner", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(arguments))
-            {
-                OnCommandIAmOwner(speaker, capturedCommand);
-                return;
-            }
             
             if (cmd.MinArgs > 0)
             {
@@ -809,19 +808,28 @@ namespace PRoConEvents
             cmd.HandleMethod.Invoke(speaker, capturedCommand);
         }
         
-        private void OnCommandIAmOwner(string strSpeaker, CapturedCommand capCommand)
+        private void OnCommandIAmOwner(string strSpeaker)
         {
             DebugWrite("[COMMAND] [IAMOWNER] - speaker: " + strSpeaker, 2);
-            if (!string.IsNullOrEmpty(capCommand.ExtraArguments)) return;
             bool ownerExists = CheckOwnerExists();
             if (ownerExists)
             {
                 PlayerSayMsg(strSpeaker, "Oops! I already have my master setup");
                 return;
             }
-            string message = PutGroup(_mAuthPlayerInfo[strSpeaker].Id, UserGroup.Admin)
-                ? "You are now my master. Type !help for available commands"
-                : "Err! There was some error connecting to the database";
+
+            bool success = PutGroup(_mAuthPlayerInfo[strSpeaker].Id, UserGroup.Admin);
+
+            string message;
+            if (success)
+            {
+                _mAuthPlayerInfo[strSpeaker].UserGroup = (int) UserGroup.Admin;
+                message = "You are now my master. Type !help for available commands";
+            }
+            else
+            {
+                message = "Err! There was some error connecting to the database";
+            }
             PlayerSayMsg(strSpeaker, message);
         }
 
@@ -973,13 +981,22 @@ namespace PRoConEvents
             DebugWrite("[COMMAND] [KILL] - Admin: " + strSpeaker + " Target: " + target, 2);
 
             if (!IsPlayerInfoCached(target)) return;
+            if (!IsAuthenticated(target))
+            {
+                PlayerSayMsg(strSpeaker, "Failed to authenticate player. Try again later");
+                return;
+            }
+            if (_mAuthPlayerInfo[target].UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup)
+            {
+                PlayerSayMsg(strSpeaker, "You cannot use this command on same or higher group users");
+                return;
+            }
             string message = target + " is killed by " + strSpeaker;
             if (!string.IsNullOrEmpty(reason)) message += " for " + reason;
 
             Kill(target);
             SayMsg(message);
-
-            if (!IsAuthenticated(target)) return;
+            
             AuthSoldier adminData = _mAuthPlayerInfo[strSpeaker];
             AuthSoldier targetData = _mAuthPlayerInfo[target];
             AddPenaltyToDb(targetData.Id, adminData.Id, reason, Penalty.Kill);
@@ -999,6 +1016,12 @@ namespace PRoConEvents
                 if (string.IsNullOrEmpty(target))
                 {
                     PlayerSayMsg(strSpeaker, "No users found with userId: " + target);
+                    return;
+                }
+
+                if (client.UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup)
+                {
+                    PlayerSayMsg(strSpeaker, "You cannot use this command on same or higher group users");
                     return;
                 }
 
@@ -1023,6 +1046,11 @@ namespace PRoConEvents
                 if (!IsAuthenticated(target))
                 {
                     PlayerSayMsg(strSpeaker, "Failed to authenticate player. Try again later");
+                    return;
+                }
+                if (_mAuthPlayerInfo[target].UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup)
+                {
+                    PlayerSayMsg(strSpeaker, "You cannot use this command on same or higher group users");
                     return;
                 }
                 if (_lCursedPlayers.Contains(target))
@@ -1115,13 +1143,23 @@ namespace PRoConEvents
             DebugWrite("[COMMAND] [KICK] - Admin: " + strSpeaker + " Target: " + target, 2);
 
             if (!IsPlayerInfoCached(target)) return;
+            if (!IsAuthenticated(target))
+            {
+                PlayerSayMsg(strSpeaker, "Failed to authenticate player. Try again later");
+                return;
+            }
+            if (_mAuthPlayerInfo[target].UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup)
+            {
+                PlayerSayMsg(strSpeaker, "You cannot use this command on same or higher group users");
+                return;
+            }
+            
             string message = target + " is kicked by " + strSpeaker;
             if (!string.IsNullOrEmpty(reason)) message += " for " + reason;
 
             SayMsg(message);
             Kick(target, reason);
 
-            if (!IsAuthenticated(target)) return;
             AuthSoldier adminData = _mAuthPlayerInfo[strSpeaker];
             AuthSoldier targetData = _mAuthPlayerInfo[target];
             AddPenaltyToDb(targetData.Id, adminData.Id, reason, Penalty.Kick);
@@ -1142,7 +1180,11 @@ namespace PRoConEvents
                     PlayerSayMsg(strSpeaker, "No users found with userId: " + target);
                     return;
                 }
-                
+                if (client.UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup)
+                {
+                    PlayerSayMsg(strSpeaker, "You cannot use this command on same or higher group users");
+                    return;
+                }
                 if (client.PenaltyType == (int) Penalty.Ban)
                 {
                     PlayerSayMsg(strSpeaker, target + " is already banned");
@@ -1164,6 +1206,11 @@ namespace PRoConEvents
                 if (!IsAuthenticated(target))
                 {
                     PlayerSayMsg(strSpeaker, "Failed to authenticate player. Try again later");
+                    return;
+                }
+                if (_mAuthPlayerInfo[target].UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup)
+                {
+                    PlayerSayMsg(strSpeaker, "You cannot use this command on same or higher group users");
                     return;
                 }
                 AuthSoldier adminData = _mAuthPlayerInfo[strSpeaker];
@@ -1267,6 +1314,12 @@ namespace PRoConEvents
                 if (string.IsNullOrEmpty(target))
                 {
                     PlayerSayMsg(strSpeaker, "No users found with userId: " + capCommand.UserId);
+                    return;
+                }
+                
+                if (client.UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup)
+                {
+                    PlayerSayMsg(strSpeaker, "You cannot use this command on same or higher group users");
                     return;
                 }
 
@@ -1796,9 +1849,12 @@ namespace PRoConEvents
             List<string[]> names = new List<string[]>();
             if (!_tableExists) return names;
 
-            const string sql1 = @"SELECT id, name FROM `clients` WHERE name LIKE  @Match LIMIT 5";
+            const string query =
+                "SELECT clients.id, clients.name, clients.user_group, clients.penalty_type FROM `clients` WHERE name LIKE @Match UNION ALL " +
+                "SELECT aliases.client_id as id, aliases.alias as name, clients.user_group, clients.penalty_type FROM `aliases` INNER JOIN `clients` ON aliases.client_id = clients.id "+
+                "WHERE aliases.alias LIKE @Match LIMIT 5";
 
-            using (MySqlCommand myCmd = new MySqlCommand(sql1))
+            using (MySqlCommand myCmd = new MySqlCommand(query))
             {
                 myCmd.Parameters.AddWithValue("@Match", "%" + matchingName + "%");
                 DataTable resultTable = SqlQuery(myCmd, "LookupClient");
@@ -1859,7 +1915,7 @@ namespace PRoConEvents
             {
                 // wait a little bit after layer restart
                 DebugWrite("[Task] [PluginStarter] Layer restart detected. Warmup...", 4);
-                if ((DateTime.UtcNow - _layerStartingTime).TotalSeconds > 30)
+                if ((DateTime.UtcNow - _layerStartingTime).TotalSeconds > 10)
                 {
                     Thread threadWorker1 = new Thread(new ThreadStart(delegate() { CheckSettingsSql(); }));
                     threadWorker1.IsBackground = true;
