@@ -1574,29 +1574,29 @@ namespace PRoConEvents
             {
                 ConsoleWrite("Creating clients table");
                 const string clientsTable = @"CREATE TABLE IF NOT EXISTS `clients` (
-                                    `id` INT( 11 ) NOT NULL AUTO_INCREMENT,
-                                    `name` VARCHAR( 50 ) DEFAULT NULL,
-                                    `guid` VARCHAR( 35 ) DEFAULT NULL,
-				                    `user_group` INT( 1 ) NOT NULL DEFAULT 0,
-				                    `penalty_type` INT( 1 ) DEFAULT 0,
-                                    `time_add` INT ( 11 ) NOT NULL DEFAULT 0,
-                                    `time_edit` INT ( 11 ) NOT NULL DEFAULT 0,
+                                    `id` INT( 10 ) UNSIGNED NOT NULL AUTO_INCREMENT,
+                                    `name` VARCHAR( 50 ) NOT NULL DEFAULT '',
+                                    `guid` VARCHAR( 36 ) NOT NULL DEFAULT '',
+				                    `user_group` INT( 1 ) UNSIGNED NOT NULL DEFAULT 0,
+				                    `penalty_type` INT( 1 ) UNSIGNED NOT NULL DEFAULT 0,
+                                    `time_add` INT ( 11 ) UNSIGNED NOT NULL DEFAULT 0,
+                                    `time_edit` INT ( 11 ) UNSIGNED NOT NULL DEFAULT 0,
                                     PRIMARY KEY ( `id` )
                                     ) ENGINE = INNODB DEFAULT CHARSET = utf8;";
                 
                 if (!SqlNonQuery(clientsTable, "Clients-Table")) creationStatus = false;
             }
 
-            if (creationStatus && !aliasesTableExists)
+            if (creationStatus && !penaltiesTableExists)
             {
-                ConsoleWrite("Creating aliases table");
+                ConsoleWrite("Creating penalties table");
                 const string penaltiesTable = @"CREATE TABLE IF NOT EXISTS `penalties` (
-                                    `id` INT( 11 ) NOT NULL AUTO_INCREMENT,
-                                    `type` INT( 1 ) DEFAULT 0,
-                                    `client_id` INT( 11 ) NOT NULL,
-                                    `admin_id` INT( 11 ) NOT NULL,
-                                    `reason` VARCHAR( 150 ) DEFAULT NULL,
-                                    `server` VARCHAR( 150 ) DEFAULT NULL,
+                                    `id` INT( 11 ) UNSIGNED NOT NULL AUTO_INCREMENT,
+                                    `type` INT( 1 ) UNSIGNED NOT NULL DEFAULT 0,
+                                    `client_id` INT( 11 ) UNSIGNED NOT NULL,
+                                    `admin_id` INT( 11 ) UNSIGNED NOT NULL,
+                                    `reason` VARCHAR( 255 ) NOT NULL DEFAULT '',
+                                    `server` VARCHAR( 150 ) NOT NULL DEFAULT '',
                                     `time_add` INT ( 11 ) NOT NULL DEFAULT 0,
                                     `time_edit` INT ( 11 ) NOT NULL DEFAULT 0,
                                     PRIMARY KEY ( `id` )
@@ -1604,14 +1604,14 @@ namespace PRoConEvents
                 if (!SqlNonQuery(penaltiesTable, "Penalties-Table")) creationStatus = false;
             }
 
-            if (creationStatus && !penaltiesTableExists)
+            if (creationStatus && !aliasesTableExists)
             {
-                ConsoleWrite("Creating penalties table");
+                ConsoleWrite("Creating aliases table");
                 const string aliasesTable = @"CREATE TABLE IF NOT EXISTS `aliases` (
-                                    `id` INT( 11 ) NOT NULL AUTO_INCREMENT,
-                                    `alias` VARCHAR( 50 ) DEFAULT NULL,
-                                    `client_id` INT( 11 ) NOT NULL,
-                                    `time_add` INT ( 11 ) NOT NULL DEFAULT 0,
+                                    `id` INT( 10 ) UNSIGNED NOT NULL AUTO_INCREMENT,
+                                    `alias` VARCHAR( 50 ) NOT NULL DEFAULT '',
+                                    `client_id` INT( 10 ) UNSIGNED NOT NULL DEFAULT 0,
+                                    `time_add` INT ( 10 ) UNSIGNED NOT NULL DEFAULT 0,
                                     PRIMARY KEY ( `id` )
                                     ) ENGINE = INNODB DEFAULT CHARSET = utf8;";
                 if (!SqlNonQuery(aliasesTable, "Aliases-Table")) creationStatus = false;
