@@ -1191,7 +1191,7 @@ namespace PRoConEvents
                     return;
                 }
                 
-                success = AddPenaltyToDb(_mAuthPlayerInfo[strSpeaker].Id, capCommand.UserId, reason, Penalty.Ban);
+                success = AddPenaltyToDb(capCommand.UserId, _mAuthPlayerInfo[strSpeaker].Id, reason, Penalty.Ban);
                 if (success)
                 {
                     KeyValuePair<string, AuthSoldier> match = _mAuthPlayerInfo.First(kvp => kvp.Value.Id == capCommand.UserId);
