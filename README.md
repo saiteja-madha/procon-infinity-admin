@@ -28,13 +28,16 @@ A simple procon plugin that uses MySQL database the sync admins and penalities a
 - `kick <player> (reason)`: kick a player from the server
 - `ban <player> (reason)`: ban a player from the server
 - `lookup <player|@id>`: find player in database
+- `penalties (penalty-type)`: fetch last 5 penalties from database
 
 ### Super Admin Commands
 - `putgroup <player|@id> <group>`: change a players group
 
 ### FAQ
 - Command Prefixes: `! @ /`
-- Avaliable User Groups: `user`, `vip`, `admin`, `superadmin`, `owner`
+- Required Arguments are denoted by [] and optional arguments are denoted by ()
+- Available User Groups: `user`, `vip`, `admin`, `superadmin`, `owner`
+- Available Penalty Types: `kill`, `curse`, `kick`, `ban`
 
 ### Known Issues
 - [x] admins can kill/kick/ban each other
