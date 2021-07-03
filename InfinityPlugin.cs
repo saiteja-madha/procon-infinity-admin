@@ -106,6 +106,7 @@ namespace PRoConEvents
         private string _cmdUnban;
         private string _cmdLookup;
         private string _cmdPutGroup;
+        private string _cmdPenalties;
 
         public InfinityPlugin()
         {
@@ -148,6 +149,7 @@ namespace PRoConEvents
             _cmdUnban = "unban";
             _cmdLookup = "lookup";
             _cmdPutGroup = "putgroup";
+            _cmdPenalties = "penalties";
         }
 
         #endregion
@@ -266,6 +268,7 @@ namespace PRoConEvents
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Ban", _cmdBan.GetType(), _cmdBan),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Unban", _cmdUnban.GetType(), _cmdUnban),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Lookup", _cmdLookup.GetType(), _cmdLookup),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "Recent Penalties", _cmdPenalties.GetType(), _cmdPenalties),
                 new CPluginVariable(SettingsSuperAdminCommandsPrefix + "Set player group", _cmdPutGroup.GetType(), _cmdPutGroup),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Confirm", _cmdConfirm.GetType(), _cmdConfirm),
                 new CPluginVariable(SettingsAdditionalPrefix + "Debug level", _fDebugLevel.GetType(), _fDebugLevel),
@@ -388,6 +391,7 @@ namespace PRoConEvents
             else if (Regex.Match(strVariable, @"Ban").Success) _cmdBan = strValue;
             else if (Regex.Match(strVariable, @"Unban").Success) _cmdUnban = strValue;
             else if (Regex.Match(strVariable, @"Lookup").Success) _cmdLookup = strValue;
+            else if (Regex.Match(strVariable, @"Recent Penalties").Success) _cmdPenalties = strValue;
             else if (Regex.Match(strVariable, @"Set player group").Success) _cmdPutGroup = strValue;
             else if (Regex.Match(strVariable, @"Confirm").Success) _cmdConfirm = strValue;
             
@@ -690,13 +694,13 @@ namespace PRoConEvents
             if (!string.IsNullOrEmpty(_cmdKill))
             {
                 _mIngameCommands.Add(_cmdKill,
-                    new Command(_cmdKill, "kill a player", "<player> <reason>", UserGroup.Admin, 1, true, 1, OnCommandKill));
+                    new Command(_cmdKill, "kill a player", "<player> (reason)", UserGroup.Admin, 1, true, 1, OnCommandKill));
             }
             
             if (!string.IsNullOrEmpty(_cmdCurse))
             {
                 _mIngameCommands.Add(_cmdCurse,
-                    new Command(_cmdCurse, "curse a player", "<@uid/player> <reason>", UserGroup.Admin, 1, true, 1, true, OnCommandCurse));
+                    new Command(_cmdCurse, "curse a player", "<@uid/player> (reason)", UserGroup.Admin, 1, true, 1, true, OnCommandCurse));
             }
             
             if (!string.IsNullOrEmpty(_cmdUncurse))
@@ -708,13 +712,13 @@ namespace PRoConEvents
             if (!string.IsNullOrEmpty(_cmdKick))
             {
                 _mIngameCommands.Add(_cmdKick,
-                    new Command(_cmdKick, "kick a player", "<player> <reason>", UserGroup.Admin, 1, true, 1, OnCommandKick));
+                    new Command(_cmdKick, "kick a player", "<player> (reason)", UserGroup.Admin, 1, true, 1, OnCommandKick));
             }
             
             if (!string.IsNullOrEmpty(_cmdBan))
             {
                 _mIngameCommands.Add(_cmdBan,
-                    new Command(_cmdBan, "ban a player", "<@uid/player> <reason>", UserGroup.Admin, 1, true, 1, true, OnCommandBan));
+                    new Command(_cmdBan, "ban a player", "<@uid/player> (reason)", UserGroup.Admin, 1, true, 1, true, OnCommandBan));
             }
             
             if (!string.IsNullOrEmpty(_cmdUnban))
@@ -733,6 +737,12 @@ namespace PRoConEvents
             {
                 _mIngameCommands.Add(_cmdPutGroup,
                     new Command(_cmdPutGroup, "put user in specified group", "<@uid/name>", UserGroup.SuperAdmin, 1, true, 1, true, OnCommandPutGroup));
+            }
+            
+            if (!string.IsNullOrEmpty(_cmdPenalties))
+            {
+                _mIngameCommands.Add(_cmdPenalties,
+                    new Command(_cmdPenalties, "list previous penalties", "(penalty)", UserGroup.SuperAdmin, 0, false, 0, false, OnCommandPenalties));
             }
 
         }
@@ -785,7 +795,7 @@ namespace PRoConEvents
             }
 
             if (uid == 0 && cmd.ArgsSoldiers > 0)
-            { 
+            {
                 capturedCommand = cmd.ParseArguments(arguments, new List<string>(_mDicPlayerInfo.Keys));
                 if (capturedCommand == null)
                 {
@@ -1034,8 +1044,11 @@ namespace PRoConEvents
                 success = AddPenaltyToDb(capCommand.UserId, _mAuthPlayerInfo[strSpeaker].Id, reason, Penalty.Curse);
                 if (success)
                 {
-                    KeyValuePair<string, AuthSoldier> match = _mAuthPlayerInfo.First(kvp => kvp.Value.Id == capCommand.UserId);
-                    _lCursedPlayers.Add(match.Key);
+                    string match = FindIngameSoldierFromId(capCommand.UserId);
+                    if (!string.IsNullOrEmpty(match))
+                    {
+                        _lCursedPlayers.Add(match);
+                    }
                 }
             }
             else
@@ -1164,7 +1177,7 @@ namespace PRoConEvents
             AuthSoldier targetData = _mAuthPlayerInfo[target];
             AddPenaltyToDb(targetData.Id, adminData.Id, reason, Penalty.Kick);
         }
-        
+
         private void OnCommandBan(string strSpeaker, CapturedCommand capCommand)
         {
             string reason = capCommand.ExtraArguments;
@@ -1194,8 +1207,12 @@ namespace PRoConEvents
                 success = AddPenaltyToDb(capCommand.UserId, _mAuthPlayerInfo[strSpeaker].Id, reason, Penalty.Ban);
                 if (success)
                 {
-                    KeyValuePair<string, AuthSoldier> match = _mAuthPlayerInfo.First(kvp => kvp.Value.Id == capCommand.UserId);
-                    Kick(match.Key, "You are banned by " + strSpeaker);
+                    ConsoleWarn("Success executed BAN");
+                    string match = FindIngameSoldierFromId(capCommand.UserId);
+                    if (!string.IsNullOrEmpty(match))
+                    {
+                        Kick(match, "You are banned by " + strSpeaker);
+                    }
                 }
             }
             else
@@ -1365,6 +1382,38 @@ namespace PRoConEvents
             else
             {
                 PlayerSayMsg(strSpeaker, "Failed to put " + target + " in " + group + "!");
+            }
+        }
+        
+        private void OnCommandPenalties(string strSpeaker, CapturedCommand capCommand)
+        {
+            Penalty penalty;
+            try
+            {
+                penalty = (Penalty) Enum.Parse(typeof(Penalty), capCommand.ExtraArguments, true);
+            }
+            catch (Exception)
+            {
+                if (!string.IsNullOrEmpty(capCommand.ExtraArguments))
+                {
+                    PlayerSayMsg(strSpeaker, "Not a valid penalty type. Fetching all penalties...");
+                }
+                penalty = Penalty.None;
+            }
+            
+            DebugWrite("[COMMAND] [PENALTIES] - " + strSpeaker, 2);
+            List<PenaltyLog> penaltyLogs = GetPenalties(penalty);
+
+            if (penaltyLogs.Count == 0)
+            {
+                PlayerSayMsg(strSpeaker, "No recent penalties found");
+                return;
+            }
+            
+            PlayerSayMsg(strSpeaker, "==== Recent Penalties ====");
+            foreach (string msg in penaltyLogs.Select(log => "[" + log.Penalty + "] - " + log.Player + "(" + log.PlayerId + ") by " + log.Admin + "(" + log.AdminId + ") | Reason: " + log.Reason))
+            {
+                PlayerSayMsg(strSpeaker, msg);
             }
         }
 
@@ -1876,8 +1925,8 @@ namespace PRoConEvents
         {
             if (!_tableExists) return false;
             int groupId = (int) group;
-            const string sql2 = "UPDATE clients SET user_group = @GroupId WHERE id = @Id;";
-            using (MySqlCommand myCmd = new MySqlCommand(sql2))
+            const string sql = "UPDATE clients SET user_group = @GroupId WHERE id = @Id;";
+            using (MySqlCommand myCmd = new MySqlCommand(sql))
             {
                 myCmd.Parameters.AddWithValue("@GroupId", groupId);
                 myCmd.Parameters.AddWithValue("@Id", uid);
@@ -1901,6 +1950,41 @@ namespace PRoConEvents
                 DebugWrite("[SQL-CheckOwnerExists]: Owner already exists", 4);
                 return false;
             }
+        }
+
+        private List<PenaltyLog> GetPenalties(Penalty penalty)
+        {
+            List<PenaltyLog> list = new List<PenaltyLog>();
+            if (!_tableExists) return list;
+            int penaltyType = (int) penalty;
+            
+            string sql = "SELECT p.type, p.reason, p.client_id, c1.name as client_name, p.admin_id, c2.name as admin_name FROM penalties as p INNER JOIN clients AS c1 ON c1.id=p.client_id INNER JOIN clients AS c2 ON c2.id=p.admin_id ";
+
+            if (penaltyType > 0)
+            {
+                sql += "WHERE p.type = @PenaltyType ";
+            }
+
+            sql += "ORDER BY p.id DESC LIMIT 5";
+            
+            using (MySqlCommand myCmd = new MySqlCommand(sql))
+            {
+                if (penaltyType > 0)
+                {
+                    myCmd.Parameters.AddWithValue("@PenaltyType", penaltyType);
+                }
+                DataTable resultTable = SqlQuery(myCmd, "GetPenalties");
+                if (resultTable.Rows.Count == 0)
+                {
+                    DebugWrite("[SQL-GetPenalties]: No penalties found for: " + penalty, 4);
+                }
+                else
+                {
+                    DebugWrite("[SQL-GetPenalties]: " + resultTable.Rows.Count +" Penalties found for: " + penalty, 4);
+                    list.AddRange(from DataRow row in resultTable.Rows select new PenaltyLog(row));
+                }
+            }
+            return list;
         }
 
         #endregion
@@ -1997,6 +2081,11 @@ namespace PRoConEvents
         {
             return (_settingYellDuring * 1000).ToString();
         }
+        
+        private string FindIngameSoldierFromId(int userId)
+        {
+            return (from entry in _mAuthPlayerInfo where entry.Value.Id == userId select entry.Key).FirstOrDefault();
+        }
 
         #endregion
 
@@ -2007,7 +2096,7 @@ namespace PRoConEvents
         private void PlayerSayMsg(string target, string message)
         {
             if (!_fIsEnabled || message.Length < 3) return;
-
+            
             ExecuteCommand("procon.protected.chat.write", "(PlayerSay " + target + ") " + message.Replace(Environment.NewLine, " "));
             if (message.Length < MaxLineLength)
             {
@@ -2028,9 +2117,13 @@ namespace PRoConEvents
         private void SayMsg(string message)
         {
             if (!_fIsEnabled || message.Length < 3) return;
-
+            
             ExecuteCommand("procon.protected.chat.write", message.Replace(Environment.NewLine, " "));
             if (message.Length < MaxLineLength)
+            {
+                ExecuteCommand("procon.protected.send", "admin.say", message.Replace(Environment.NewLine, " "), "all");
+            }
+            else
             {
                 int charCount = 0;
                 IEnumerable<string> lines = message.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).GroupBy(w => (charCount += w.Length + 1) / MaxLineLength).Select(g => string.Join(" ", g.ToArray()));
@@ -2038,10 +2131,6 @@ namespace PRoConEvents
                 {
                     ExecuteCommand("procon.protected.send", "admin.say", line, "all");
                 }
-            }
-            else
-            {
-                ExecuteCommand("procon.protected.send", "admin.say", message.Replace(Environment.NewLine, " "), "all");
             }
             DebugWrite("[SayMsg] - " + message, 3);
         }
@@ -2103,9 +2192,10 @@ namespace PRoConEvents
         //////////////////////
         #region MODEL CLASSES & ENUMS
         //////////////////////
-
+        
         private enum Penalty
         {
+            None = 0,
             Warn = 1,
             Kill = 2,
             Curse = 3,
@@ -2120,6 +2210,33 @@ namespace PRoConEvents
             Admin = 60,
             SuperAdmin = 80,
             Owner = 100
+        }
+
+        private class PenaltyLog
+        {
+            public PenaltyLog(DataRow row)
+            {
+                int value = Convert.ToInt32(row["type"]);
+                Penalty = (Penalty) value;
+                Player = row["client_name"].ToString();
+                PlayerId = Convert.ToInt32(row["client_id"]);
+                Admin = row["admin_name"].ToString();
+                AdminId = Convert.ToInt32(row["admin_id"]);
+                Reason = string.IsNullOrEmpty(row["reason"].ToString()) ? "NA" : row["reason"].ToString();
+            }
+            
+            public Penalty Penalty { get; }
+            
+            public string Player { get; }
+            
+            public int PlayerId { get;  }
+            
+            public string Admin { get; }
+            
+            public int AdminId { get;  }
+
+            public string Reason { get; }
+
         }
         
         private class AuthSoldier
