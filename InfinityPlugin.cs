@@ -1704,49 +1704,15 @@ namespace PRoConEvents
             if (!_mDicPlayerInfo.ContainsKey(name)) return null;
 
             CPlayerInfo playerInfo = _mDicPlayerInfo[name];
-
-            string clanTag = playerInfo.ClanTag;
-            string soldier = GetEffectiveSoldierName(name, clanTag);
             string guid = playerInfo.GUID;
 
-            string sql = @"SELECT * FROM `clients`";
-            bool sqlender = true;
+            if (string.IsNullOrEmpty(guid)) return null;
 
-            if (!string.IsNullOrEmpty(soldier))
-            {
-                sql += " WHERE (";
-                sqlender = false;
-                sql += @"name LIKE @Soldier";
-            }
-
-            if (!string.IsNullOrEmpty(guid))
-            {
-                if (sqlender)
-                {
-                    sql += " WHERE (";
-                }
-                else
-                {
-                    sql += " OR ";
-                }
-
-                sql += @" guid LIKE @Guid";
-            }
-
-            sql += ");";
+            string sql = @"SELECT * FROM `clients` WHERE guid = @Guid";
 
             using (MySqlCommand myCmd = new MySqlCommand(sql))
             {
-                if (!string.IsNullOrEmpty(soldier))
-                {
-                    myCmd.Parameters.AddWithValue("@Soldier", soldier);
-                }
-
-                if (!string.IsNullOrEmpty(soldier))
-                {
-                    myCmd.Parameters.AddWithValue("@Guid", guid);
-                }
-
+                myCmd.Parameters.AddWithValue("@Guid", guid);
                 DataTable resultTable = SqlQuery(myCmd, "RetrieveSoldierData");
                 if (resultTable.Rows.Count == 0)
                 {
@@ -1777,6 +1743,9 @@ namespace PRoConEvents
             string soldier = GetEffectiveSoldierName(name, clanTag);
             string guid = playerInfo.GUID;
             long unix = GetTimeEpoch();
+
+            // GUID seems to be empty sometimes?
+            if (string.IsNullOrEmpty(guid)) return false;
 
             const string sql = @"INSERT INTO clients (`name`, `guid`, `time_add`, `time_edit`) VALUES (@Soldier, @Guid, @TimeAdd, @TimeEdit)";
 
@@ -2043,7 +2012,10 @@ namespace PRoConEvents
 
             if (data.Id == 0)
             {
-                RegisterSoldier(name);
+                if (RegisterSoldier(name))
+                {
+                    PlayerSayMsg(name, "You are successfully registered on our server");
+                }
                 return;
             }
 
