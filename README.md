@@ -45,3 +45,4 @@ A simple procon plugin that uses MySQL database the sync admins and penalities a
 - [x] !lookup doesn't check for aliases
 - [x] ban command can be used on self
 - [ ] !putgroup doesn't show any success response
+- [ ] !putgroup is case sensitive
