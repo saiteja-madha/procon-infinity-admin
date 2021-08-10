@@ -97,6 +97,7 @@ namespace PRoConEvents
         private string _cmdPlayerSay;
         private string _cmdYell;
         private string _cmdPlayerYell;
+        private string _cmdSwapMe;
         private string _cmdSwap;
         private string _cmdCurse;
         private string _cmdUncurse;
@@ -144,6 +145,7 @@ namespace PRoConEvents
             _cmdUncurse = "uncurse";
             _cmdKill = "kill";
             _cmdKick = "kick";
+            _cmdSwapMe = "swapme";
             _cmdSwap = "swap";
             _cmdBan = "ban";
             _cmdUnban = "unban";
@@ -260,6 +262,7 @@ namespace PRoConEvents
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Playersay", _cmdPlayerSay.GetType(), _cmdPlayerSay),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Yell", _cmdYell.GetType(), _cmdYell),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Playeryell", _cmdPlayerYell.GetType(), _cmdPlayerYell),
+                new CPluginVariable(SettingsAdminCommandsPrefix + "SwapMe", _cmdSwapMe.GetType(), _cmdSwapMe),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Swap", _cmdSwap.GetType(), _cmdSwap),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Kill", _cmdKill.GetType(), _cmdKill),
                 new CPluginVariable(SettingsAdminCommandsPrefix + "Curse", _cmdCurse.GetType(), _cmdCurse),
@@ -383,6 +386,7 @@ namespace PRoConEvents
             else if (Regex.Match(strVariable, @"Playersay").Success) _cmdPlayerSay = strValue;
             else if (Regex.Match(strVariable, @"Yell").Success) _cmdYell = strValue;
             else if (Regex.Match(strVariable, @"Playeryell").Success) _cmdPlayerYell = strValue;
+            else if (Regex.Match(strVariable, @"SwapMe").Success) _cmdSwapMe = strValue;
             else if (Regex.Match(strVariable, @"Swap").Success) _cmdSwap = strValue;
             else if (Regex.Match(strVariable, @"Kill").Success) _cmdKill = strValue;
             else if (Regex.Match(strVariable, @"Curse").Success) _cmdCurse = strValue;
@@ -460,6 +464,7 @@ namespace PRoConEvents
             RegisterIngameCommands();
             ExecuteCommand("procon.protected.tasks.add", "InfinityPlugin", "3", "9", "20", "procon.protected.plugins.call", "InfinityPlugin", "PluginStarter");
             ConsoleWrite("Enabled!");
+            SayMsg("INFINITY Admin is booting up...");
         }
 
         public void OnPluginDisable()
@@ -684,11 +689,17 @@ namespace PRoConEvents
                 _mIngameCommands.Add(_cmdPlayerYell,
                     new Command(_cmdPlayerYell, "yell a message to a player", "<player> <message>", UserGroup.Admin, 2, false, 1, OnCommandPlayerYell));
             }
+            
+            if (!string.IsNullOrEmpty(_cmdSwapMe))
+            {
+                _mIngameCommands.Add(_cmdSwapMe,
+                    new Command(_cmdSwapMe, "swap yourself with a player", "<player>", UserGroup.Admin, 1, true, 1, OnCommandSwapMe));
+            }
 
             if (!string.IsNullOrEmpty(_cmdSwap))
             {
                 _mIngameCommands.Add(_cmdSwap,
-                    new Command(_cmdSwap, "swap 2 players", "<player>", UserGroup.Admin, 2, false, 2, OnCommandSwap));
+                    new Command(_cmdSwap, "swap 2 players", "<player1> <player2>", UserGroup.Admin, 2, true, 2, OnCommandSwap));
             }
             
             if (!string.IsNullOrEmpty(_cmdKill))
@@ -806,7 +817,7 @@ namespace PRoConEvents
 
             if (cmd.RequiresConfirmation && !cmd.CanAcceptUid)
             {
-                PlayerSayMsg(speaker, string.Format("Did you mean? {0}", capturedCommand));
+                PlayerSayMsg(speaker, string.Format("Did you mean? {0} | Type !" + _cmdConfirm + " to confirm", capturedCommand));
                 if (_mPendingConfirmations.ContainsKey(speaker))
                     _mPendingConfirmations[speaker] = new ConfirmationEntry(cmd, capturedCommand);
                 else
@@ -911,7 +922,6 @@ namespace PRoConEvents
         private void OnCommandKillMe(string strSpeaker, CapturedCommand capCommand)
         {
             DebugWrite("[COMMAND] [KILLME] - " + strSpeaker, 2);
-            if (string.IsNullOrEmpty(capCommand.ExtraArguments)) return;
             Kill(strSpeaker);
         }
 
@@ -947,6 +957,43 @@ namespace PRoConEvents
             PlayerYellMsg(target, message);
         }
 
+        private void OnCommandSwapMe(string strSpeaker, CapturedCommand capCommand)
+        {
+            if (!IsPlayerInfoCached(capCommand.MatchedArguments[0].Argument) || !IsPlayerInfoCached(strSpeaker)) return;
+
+            CPlayerInfo player1 = _mDicPlayerInfo[strSpeaker];
+            CPlayerInfo player2 = _mDicPlayerInfo[capCommand.MatchedArguments[0].Argument];
+
+            if (player1.TeamID <= 0 || player2.TeamID <= 0)
+            {
+                PlayerSayMsg(strSpeaker, "Swap Error! Are both players in either team?");
+                return;
+            }
+
+            if (player1.TeamID == player2.TeamID && player1.SquadID == player2.SquadID)
+            {
+                PlayerSayMsg(strSpeaker, "You cannot swap yourself with player in same team and squad");
+                return;
+            }
+
+            if (_serverInfo.PlayerCount == _serverInfo.MaxPlayerCount)
+            {
+                MovePlayer(player1.SoldierName, 0, 0);
+                MovePlayer(player2.SoldierName, 0, 0);
+
+                MovePlayer(player1.SoldierName, player1.TeamID == 1 ? 2 : 1, 0);
+                MovePlayer(player2.SoldierName, player2.TeamID == 1 ? 2 : 1, 0);
+
+                DebugWrite("[COMMAND] [SWAPME] - Player1: " + player1.SoldierName + "Player2: " + player2.SoldierName, 2);
+            }
+            else
+            {
+                MovePlayer(player1.SoldierName, player1.TeamID == 1 ? 2 : 1, 0);
+                MovePlayer(player2.SoldierName, player2.TeamID == 1 ? 2 : 1, 0);
+                DebugWrite("[COMMAND] [SWAPME] - Player1: " + player1.SoldierName + "Player2: " + player2.SoldierName, 2);
+            }
+        }
+        
         private void OnCommandSwap(string strSpeaker, CapturedCommand capCommand)
         {
             if (!IsPlayerInfoCached(capCommand.MatchedArguments[0].Argument) || !IsPlayerInfoCached(capCommand.MatchedArguments[1].Argument)) return;
@@ -996,7 +1043,7 @@ namespace PRoConEvents
                 PlayerSayMsg(strSpeaker, "Failed to authenticate player. Try again later");
                 return;
             }
-            if (_mAuthPlayerInfo[target].UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup)
+            if (_mAuthPlayerInfo[target].UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup && !target.Equals(strSpeaker))
             {
                 PlayerSayMsg(strSpeaker, "You cannot use this command on same or higher group users");
                 return;
@@ -1029,7 +1076,7 @@ namespace PRoConEvents
                     return;
                 }
 
-                if (client.UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup)
+                if (client.UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup && !target.Equals(strSpeaker))
                 {
                     PlayerSayMsg(strSpeaker, "You cannot use this command on same or higher group users");
                     return;
@@ -1061,7 +1108,7 @@ namespace PRoConEvents
                     PlayerSayMsg(strSpeaker, "Failed to authenticate player. Try again later");
                     return;
                 }
-                if (_mAuthPlayerInfo[target].UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup)
+                if (_mAuthPlayerInfo[target].UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup && !target.Equals(strSpeaker))
                 {
                     PlayerSayMsg(strSpeaker, "You cannot use this command on same or higher group users");
                     return;
