@@ -43,4 +43,5 @@ A simple procon plugin that uses MySQL database the sync admins and penalities a
 ### Known Issues
 - [x] admins can kill/kick/ban each other
 - [x] !lookup doesn't check for aliases
-- [ ] ban command can be used on self
+- [x] ban command can be used on self
+- [ ] !putgroup doesn't show any success response
