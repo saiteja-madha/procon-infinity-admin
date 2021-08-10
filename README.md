@@ -21,6 +21,7 @@ A simple procon plugin that uses MySQL database the sync admins and penalities a
 - `psay <player> <message>`: say a message to a player
 - `yell <message>`: yell a message as server
 - `pyell <player> <message>`: yell a message to a player
+- `swapme <player>`: swap yourself with another player
 - `swap <player1> <player2>`: swap 2 players in different teams/squads
 - `kill <player> (reason)`: kill a player
 - `curse <player> (reason)`: curse a player. cursed player will be killed on kill
