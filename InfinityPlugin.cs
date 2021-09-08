@@ -1,6 +1,6 @@
 /*	InfinityPlugin.cs -  Procon Plugin [BC2]
 
-	Version: 0.0.0.1
+	Version: 0.0.0.2
 
 	Code Credit:
 	PapaCharlie9 - Basic Plugin Template Part (BasicPlugin.cs)
@@ -27,6 +27,7 @@ using System;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -744,18 +745,17 @@ namespace PRoConEvents
                     new Command(_cmdLookup, "search a player in database", "<@uid/name>", UserGroup.Admin, 1, true, 0, true, OnCommandLookUp));
             }
             
+            if (!string.IsNullOrEmpty(_cmdPenalties))
+            {
+                _mIngameCommands.Add(_cmdPenalties,
+                    new Command(_cmdPenalties, "list previous penalties", "(penalty)", UserGroup.Admin, 0, false, 0, false, OnCommandPenalties));
+            }
+            
             if (!string.IsNullOrEmpty(_cmdPutGroup))
             {
                 _mIngameCommands.Add(_cmdPutGroup,
                     new Command(_cmdPutGroup, "put user in specified group", "<@uid/name>", UserGroup.SuperAdmin, 1, true, 1, true, OnCommandPutGroup));
             }
-            
-            if (!string.IsNullOrEmpty(_cmdPenalties))
-            {
-                _mIngameCommands.Add(_cmdPenalties,
-                    new Command(_cmdPenalties, "list previous penalties", "(penalty)", UserGroup.SuperAdmin, 0, false, 0, false, OnCommandPenalties));
-            }
-
         }
 
         private void CommandHandler(string speaker, string message)
@@ -1356,14 +1356,16 @@ namespace PRoConEvents
 
         private void OnCommandPutGroup(string strSpeaker, CapturedCommand capCommand)
         {
+            String userInput = capCommand.ExtraArguments;
             UserGroup group;
             try
             {
-                group = (UserGroup) Enum.Parse(typeof(UserGroup), capCommand.ExtraArguments, true);
+                group = (UserGroup) Enum.Parse(typeof(UserGroup), userInput, true);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                PlayerSayMsg(strSpeaker, "Did you enter a valid group?");
+                DebugWrite("Putgroup Error" + ex.Message, 4);
+                PlayerSayMsg(strSpeaker, "Valid groups are: user, vip, admin, superadmin");
                 return;
             }
 
@@ -1372,7 +1374,7 @@ namespace PRoConEvents
 
             if (capCommand.UserId > 0)
             {
-                DebugWrite("[COMMAND] [PUTGROUP] - Admin: " + strSpeaker + " UserId: " + group, 2);
+                DebugWrite("[COMMAND] [PUTGROUP] - Admin: " + strSpeaker + " UserId: " + capCommand.UserId, 2);
                 AuthSoldier client = LookupClient(capCommand.UserId);
                 target = client.SoldierName;
                 if (string.IsNullOrEmpty(target))
@@ -1389,7 +1391,7 @@ namespace PRoConEvents
 
                 if (client.UserGroup == (int) group)
                 {
-                    PlayerSayMsg(strSpeaker, target + " is already a " + group);
+                    PlayerSayMsg(strSpeaker, target + " is already in group: " + group);
                     return;
                 }
 
@@ -1399,6 +1401,7 @@ namespace PRoConEvents
                     KeyValuePair<string, AuthSoldier> match = _mAuthPlayerInfo.First(kvp => kvp.Value.Id == capCommand.UserId);
                     match.Value.UserGroup = (int) group;
                     if (group > UserGroup.Vip) _lAdminsOnline.Add(match.Key);
+                    if (group < UserGroup.Vip) _lAdminsOnline.Remove(match.Key);
                 }
             }
             else
@@ -1412,15 +1415,29 @@ namespace PRoConEvents
                     return;
                 }
 
+                AuthSoldier targetInfo = _mAuthPlayerInfo[target];
+                if (targetInfo.UserGroup >= _mAuthPlayerInfo[strSpeaker].UserGroup)
+                {
+                    PlayerSayMsg(strSpeaker, "You cannot use this command on same or higher group users");
+                    return;
+                }
+
+                if (targetInfo.UserGroup == (int) group)
+                {
+                    PlayerSayMsg(strSpeaker, target + " is already in group: " + group);
+                    return;
+                }
+
                 AuthSoldier targetData = _mAuthPlayerInfo[target];
                 success = PutGroup(targetData.Id, group);
                 if (success)
                 {
                     _mAuthPlayerInfo[target].UserGroup = (int) group;
                     if (group > UserGroup.Vip) _lAdminsOnline.Add(target);
+                    if (group < UserGroup.Vip) _lAdminsOnline.Remove(target);
                 }
             }
-
+            
             if (success)
             {
                 string message = target + " is put in group " + group + " by " + strSpeaker;
@@ -1479,7 +1496,7 @@ namespace PRoConEvents
             if (myException.InnerException != null) DebugWrite("^1InnerException: " + myException.InnerException + "^0", 4);
         }
 
-        public void CheckSettingsSql()
+        private void CheckSettingsSql()
         {
             // basic checks after plugin enabled
             // check 1. sql logins
@@ -1622,6 +1639,7 @@ namespace PRoConEvents
                     {
                         query.ExecuteNonQuery();
                         sqlOk = true;
+                        DebugWrite(debugPrefix + "Executed successfully", 4);
                     }
                     finally
                     {
@@ -1903,7 +1921,7 @@ namespace PRoConEvents
                 }
                 else
                 {
-                    DebugWrite("[SQL-LookupClient]: User found with id= " + uid, 4);
+                    DebugWrite("[SQL-LookupClient]: User found with id: " + uid, 4);
                     return new AuthSoldier(resultTable.Rows[0]);
                 }
             }
