@@ -7,7 +7,7 @@ A simple procon plugin that uses MySQL database the sync admins and penalities a
 - Join any of your server and type `!iamowner`
 
 ## Supported Games
-- Battlefield Bad Company 2
+- Battlefield Bad Company 2 [EA / Nexus]
 
 ### User Commands
 - `help`: show list of available commands
@@ -39,10 +39,3 @@ A simple procon plugin that uses MySQL database the sync admins and penalities a
 - Required Arguments are denoted by [] and optional arguments are denoted by ()
 - Available User Groups: `user`, `vip`, `admin`, `superadmin`, `owner`
 - Available Penalty Types: `kill`, `curse`, `kick`, `ban`
-
-### Known Issues
-- [x] admins can kill/kick/ban each other
-- [x] !lookup doesn't check for aliases
-- [x] ban command can be used on self
-- [x] !putgroup doesn't show any success response
-- [x] !putgroup is case sensitive
